@@ -32,7 +32,7 @@ ddir = 'dat'
 pdir = 'plt'
 
 devs = ['opti','vicon','phase']
-dsfx = {'opti':'.csv','vicon':'.dcr','phase':'.txt'}
+dsfx = {'opti':'_mocap.csv','vicon':'.dcr','phase':'.txt'}
 #dsfx = {'opti':'.csv','vicon':'.dcr','phase':'.rob'}
 #dsfx = {'opti':'.csv','vicon':'.dcr','phase':'.c3d'}
 #dsfx = {'opti':'.csv','vicon':'.dcr','phase':'.nik'}
@@ -305,6 +305,7 @@ class Rbt():
         N = int( np.ceil( (t[-1] - t[0]) * hz) ) + 1
         d = np.nan*np.zeros((N,M,D))
         j = np.array( np.round( (t - t[0]) * hz ), dtype=np.int )
+
         t = np.arange(N) / float(hz)
         # enforce uniform time increments
         d[j,:,:] = d0
@@ -337,11 +338,19 @@ class Rbt():
         t,d0,_,_ = run.data()
       if N < np.inf:
         t = t[:N]; d0 = d0[:N]
+
+      #Trim out nans
+      nn = np.logical_not(np.isnan(t))
+      t = t[nn]; d0 = d0[nn,...]
+
       d0 *= m2mm
       N0,M,D = d0.shape
       # insert nan's for missing samples
       dt = np.diff(t)#; dt = dt[(1-np.isnan(dt)).nonzero()]
       hz = int(np.round(1./np.median(dt)))
+
+      #clean data
+
       if hz0:
         assert hz0 == hz
       else:
@@ -558,8 +567,11 @@ class Rbt():
       t = t[n:]; d = d[n:,:,:]
     di,fi = os.path.split(fi)
     N0,_,_ = d.shape; N = min(N,N0)
+
     # init ukf
-    from uk import uk, body, pts
+    import uk
+    from uk import body
+    from uk import pts
     X0 = np.hstack( ( np.zeros(2), 2*np.random.rand(), # pitch,roll,yaw
                      num.nanmean(d[:100,:,:],axis=0).mean(axis=0) ) ) # xyz
     Qd = ( np.hstack( (np.array([1,1,1])*2e-3, np.array([1,1,1])*5e+0) ) )
