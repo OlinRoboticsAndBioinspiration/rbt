@@ -775,7 +775,7 @@ class Rbt():
 
 if __name__ == '__main__':
 
-  rb = Rbt('square/20120619-1140')
+  rb = Rbt('test1.csv', dev='opti')
   rb.dat()
   rb.ukf(viz=100,ord=0)
   rb.load()
