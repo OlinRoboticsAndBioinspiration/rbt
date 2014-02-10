@@ -21,6 +21,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
 from util import files,geom,num,util
+from scipy.signal import gaussian
 
 m2mm = 1000.
 deg2rad = np.pi / 180.
@@ -40,11 +41,11 @@ units = {'opti':'mm','vicon':'mm','phase':'mm'}
 
 air = ['dat','plt']
 cal = ['dat','plane','cal','plt']
-ukf = ['dat','cal','geom','ukf','plt']
+ukf = ['dat','cal','geom','ukf']#,'plt']
 sync = ['dat']
 load = ['load']
 skel = ['dat','geom','plt']
-
+fitness = ['load','crop', 'mcu']#, 'metrics']
 def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz',**kwds):
   """
   Process all unprocessed rigid body data
@@ -100,7 +101,9 @@ def do_(fi='',dev=None,trk='rbt',procs=ukf,**kwds):
   rb = Rbt(fi,trk=trk,dev=dev)
   for proc in procs:
     cmd = 'rb.'+proc+'(**kwds)'
-    #print cmd
+    print cmd
+    print rb
+    print rb.mcu
     eval( cmd )
   return rb
 
@@ -135,13 +138,22 @@ class Rbt():
       fi,_ = fi.split('.')
     self.fi = fi
     self.t = None #Time series
+
     ##Dictionary with locations for X.
     #Example: dict(pitch=0,roll=1,yaw=2,x=3,y=4,z=5)
-    self.j = None 
+    self.j = None  #Labels for UKF
     self.d = None #Data for each marker
     self.g = None
     self.X = None #UKF data corresponding to self.j
     self.hz = None
+
+    #for crop
+    self.start_trial = None
+    self.stop_trial = None
+
+    #for mcu
+    self.mcu_data = None #MCU data
+    self.mcu_j = None #MCU labels
 
     self.trk = trk
     self.dev = dev
@@ -189,7 +201,7 @@ class Rbt():
       s = util.Struct()
       s.read( os.path.join(di,ddir,fi+'_ukf.py'), locals={'array':np.array})
       self.j = s.j; self.u = s.u; 
-
+    print self.X.shape
   def dat(self,N=np.inf,hz0=None,save=True,dbg=True,**kwds):
     """
     Load raw mocap rigid body data
@@ -587,7 +599,7 @@ class Rbt():
     self.b = b
     print 'running ukf on %d samps' % N; ti = time()
     t = t[:N]
-    j = dict(pitch=0,roll=1,yaw=2,x=3,y=4,z=5)
+    j = dict(pitch=0,roll=1,yaw=2,x=3,y=4,z=5,dpitch=6, droll=7, dyaw=8, dx=9, dy=10, dz=11)
     X = uk.mocap( b, np.swapaxes(d[:N,:,:],1,2) ).T
     N,M = X.shape
     X = np.vstack(( np.nan*np.zeros((n,M)), X ))
@@ -604,7 +616,7 @@ class Rbt():
 
     return X
 
-  def plt(self,fmts=fmts,plts=['3d','2d','pd','xyz0','xyz','dxyz','pry','exp'],
+  def plt(self,fmts=fmts,plts=['3d','2d','pd','xyz0','xyz','dxyz','pry','dpry', 'exp'],
           save=True,**kwds):
     """
     Plot trajectory data 
@@ -768,6 +780,23 @@ class Rbt():
         if save:
           for fmt in fmts:
             fig.savefig(os.path.join(di,pdir,fi+'_ukf-rpy.'+fmt))
+          # pry
+        if 'dpry' in plts:
+          fig = plt.figure(F); fig.clf(); F += 1
+          ax = fig.add_subplot(311); ax.grid('on')
+          ax.set_title('$\dot{pitch}, $\dot{roll}, $\dot{yaw} plot')
+          ax.plot(t[:N],X[...,j['dpitch']],'b')
+          ax.set_ylabel('$\dot{pitch} (%s)'%u['pitch'])
+          ax = fig.add_subplot(312); ax.grid('on')
+          ax.plot(t[:N],X[...,j['droll']],'g')
+          ax.set_ylabel('$\dot{roll} (%s)'%u['roll'])
+          ax = fig.add_subplot(313); ax.grid('on')
+          ax.plot(t[:N],X[...,j['dyaw']],'r')
+          ax.set_ylabel('$\dot{yaw} (%s)'%u['yaw'])
+          ax.set_xlabel('time (sec)')
+          if save:
+            for fmt in fmts:
+              fig.savefig(os.path.join(di,pdir,fi+'_ukf-rpy.'+fmt))
       if X.shape[1] >= 12:
         # xyz
         if 'dxyz' in plts:
@@ -788,7 +817,147 @@ class Rbt():
               fig.savefig(os.path.join(di,pdir,fi+'_ukf-dxyz.'+fmt))
 
     plt.show()
+  def crop(self,**kwds):
+    t = self.t; X = self.X; N,_ = X.shape; j = self.j; u = self.u
+    speed = np.sqrt(np.diff(X[...,j['x']])**2 + np.diff(X[...,j['y']])**2)*self.hz
+    window = 80
+    std = 40
+    gaus = gaussian(window, std)
+    #normalize
+    gaus /= np.mean(gaus) 
+    gaus /= window
+    print gaus
+    print "GAUS SUM1", np.sum(gaus)
+    speed_conv = np.convolve(speed, gaus, mode="same")
+    #sketch root finding... and cropping....
+    find_at_speed = 500
+    split_seconds = 2
+    margin_seconds = .2
+    first_bit = np.abs(speed_conv[0:self.hz*split_seconds] - find_at_speed)
+    first_idx = np.argmin(first_bit)
 
+    second_bit = np.abs(speed_conv[self.hz*split_seconds:] - find_at_speed)
+    second_idx = np.argmin(second_bit) + split_seconds * self.hz
+
+    first_idx += margin_seconds * self.hz
+    second_idx -= margin_seconds * self.hz
+
+    print first_idx / float(self.hz)
+    print second_idx / float(self.hz)
+
+    if 0: #debug
+      fig = plt.figure(1)
+      ax = fig.add_subplot(111)
+      ax.plot(t[1:N], speed)
+      ax.plot(t[1:N], speed_conv)
+      max_speed = np.max(speed_conv)
+      ax.plot([first_idx / float(self.hz), first_idx / float(self.hz)], [0, max_speed])
+      ax.plot([second_idx / float(self.hz), second_idx / float(self.hz)], [0, max_speed])
+      ax.set_ylim(-100.,2100.)
+      plt.show()
+
+    self.start_trial = first_idx
+    self.stop_trial = second_idx
+  def metrics(self, dbg = True, **kwds):
+
+    t = self.t; X = self.X; j = self.j; u = self.u
+    hz = self.hz
+    if self.start_trial:
+      X = self.X[self.start_trial : self.stop_trial, ...]
+    N,_ = X.shape;
+    
+    if dbg:
+      fig = plt.figure(1);
+      ax = fig.add_subplot(311); ax.grid('on')
+      ax.set_title('$x$, $y$, $z$ plot')
+      ax.plot(t[:N],X[...,j['x']],'b')
+      ax.set_ylabel('$x$ (%s)'%u['x'])
+      ax = fig.add_subplot(312); ax.grid('on')
+      ax.plot(t[:N],X[...,j['y']],'g')
+      ax.set_ylabel('$y$ (%s)'%u['y'])
+      ax = fig.add_subplot(313); ax.grid('on')
+      ax.plot(t[:N],X[...,j['z']],'r')
+      ax.set_ylabel('$z$ (%s)'%u['z'])
+      ax.set_xlabel('time (sec)')
+
+    yaw = X[...,j["yaw"]]
+    window = 50
+    std = 30
+    gaus = gaussian(window, std)
+    gaus /= np.mean(gaus)
+    gaus /= float(window)
+    print "Metric gaus som", np.sum(gaus)
+    dir_window = np.array([-1,0,1])
+    smooth_yaw = np.convolve(yaw, gaus, mode="same")
+    d_smooth_yaw = np.convolve(smooth_yaw, dir_window, mode="same") / 2.0 * float(hz)
+    #lop of the ends to account for convolution irregularities
+    d_smooth_yaw = d_smooth_yaw[0:-window]
+    smooth_yaw = smooth_yaw[0:-window]
+    N = N-window
+    #get reasonable edges
+    bin_low = np.percentile(d_smooth_yaw, 10)
+    bin_high = np.percentile(d_smooth_yaw, 90)
+
+    if dbg:
+      plt.figure(2)
+      plt.plot(t[:N], d_smooth_yaw)
+      plt.xlabel("time (s)")
+      plt.ylabel("degrees/s")
+      plt.title("Derivative Gaussianed Yaw")
+
+      plt.figure(3)
+      plt.hist(d_smooth_yaw, np.linspace(bin_low, bin_high, 50))
+      plt.xlabel("degree / second")
+      plt.ylabel("freqency")
+      plt.title("Histogram derivative Yaw")
+      plt.figure(4)
+      plt.plot(t[:N], smooth_yaw)
+      plt.xlabel("time (s)")
+      plt.ylabel("angle (degrees)")
+      plt.title("Gaussianed Yaw")
+      plt.figure(5)
+      plt.plot(X[...,j['x']], X[...,j['y']])
+      plt.xlabel("x (mm)")
+      plt.ylabel("y (mm)")
+      plt.title("2d Trajectory")
+
+      plt.show()
+    print "metrics"
+
+  def mcu(self, **kwds):
+    print "Getting MCU stats"
+    di,fi = os.path.split(self.fi)
+    print self.fi
+    mcu_data = np.loadtxt(os.path.join(di,fi+"_mcu.csv"),delimiter=",")
+    run_config = eval(open(os.path.join(di,fi+"_cfg.py")).read())
+    mcu_j = run_config["rid"]["mcu_j"]
+    #mcu_data = mcu_data[start[:, ...]
+    #kill the nans by finding timestamps at 4294967295
+    time = mcu_data[..., mcu_j['t']]
+    dtime = np.diff(time)
+    index = np.argmax(dtime)
+    mcu_data = mcu_data[0:index, ...]
+
+    # TODO start stop syncronization
+    # Will need to scale aswell to match the two time scales possibly
+
+    # spd = np.sqrt(np.diff(self.X[...,self.j['x']])**2 +
+    #  np.diff(self.X[...,self.j['y']])**2)*self.hz
+    # plt.plot(spd)
+    # plt.ylim(0, 10)
+
+    #TODO check this math. Taken from old benchmark script
+    mcu_data[..., mcu_j['vb']] = mcu_data[..., mcu_j['vb']] * 2 * 3.3 / 1023.0
+    plt.plot(mcu_data[..., mcu_j['vb']])
+    plt.xlabel("time (samples)")
+    plt.ylabel("voltage")
+    plt.title("Battery voltage over run")
+    plt.show()
+    print run_config
+    print mcu_data
+
+    self.mcu_data = mcu_data
+    self.mcu_j = mcu_j
 if __name__ == '__main__':
 
   rb = Rbt('test1.csv', dev='opti')
