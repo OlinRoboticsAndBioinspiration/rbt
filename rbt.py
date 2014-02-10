@@ -134,11 +134,15 @@ class Rbt():
     if '.' in fi:
       fi,_ = fi.split('.')
     self.fi = fi
-    self.t = None
-    self.d = None
+    self.t = None #Time series
+    ##Dictionary with locations for X.
+    #Example: dict(pitch=0,roll=1,yaw=2,x=3,y=4,z=5)
+    self.j = None 
+    self.d = None #Data for each marker
     self.g = None
-    self.X = None
+    self.X = None #UKF data corresponding to self.j
     self.hz = None
+
     self.trk = trk
     self.dev = dev
 
