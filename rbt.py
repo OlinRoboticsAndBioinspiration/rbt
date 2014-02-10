@@ -41,7 +41,7 @@ units = {'opti':'mm','vicon':'mm','phase':'mm'}
 air = ['dat','plt']
 cal = ['dat','plane','cal','plt']
 ukf = ['dat','cal','geom','ukf','plt']
-sync = ['dat','plt']
+sync = ['dat']
 load = ['load']
 skel = ['dat','geom','plt']
 
@@ -600,7 +600,7 @@ class Rbt():
 
     return X
 
-  def plt(self,fmts=fmts,plts=['3d','pd','xyz0','xyz','dxyz','pry','exp'],
+  def plt(self,fmts=fmts,plts=['3d','2d','pd','xyz0','xyz','dxyz','pry','exp'],
           save=True,**kwds):
     """
     Plot trajectory data 
@@ -629,12 +629,14 @@ class Rbt():
                    d[::10,:,1],
                    d[::10,:,2])
         ax.set_xlabel('x (mm)'); ax.set_ylabel('y (mm)'); ax.set_zlabel('z (mm)')
+        ax.set_title("Marker Trajectory")
         #ax.set_title('floor normal = %s'%np.array_str(n,precision=2))
         #ax.view_init(elev=0.,azim=-115.)
         ax.view_init(elev=90.,azim=90.)
         if save:
           for fmt in fmts:
             fig.savefig(os.path.join(di,pdir,fi+'_dat-3d.'+fmt))
+
       # xyz0
       if 'xyz0' in plts:
         fig = plt.figure(F); fig.clf(); F += 1
@@ -691,6 +693,7 @@ class Rbt():
         ax.set_yticks( range(N-1)[::2] )
         ax.set_yticklabels(['%0.0f' % xe for xe in np.linspace(-dd,dd,num=N/2)])
         ax.set_xlabel('$x$ (mm)'); ax.set_xlabel('$y$ (mm)')
+        ax.set_title("pdhist")
         #1/0
     # ukf data
     if self.X is not None:
@@ -734,6 +737,16 @@ class Rbt():
         if save:
           for fmt in fmts:
             fig.savefig(os.path.join(di,pdir,fi+'_ukf-xyz.'+fmt))
+      if '2d' in plts:
+        fig = plt.figure(F); fig.clf(); F += 1
+        ax = fig.add_subplot(111)
+        ax.plot(X[...,j['x']],
+                   X[...,j['y']])
+        ax.set_xlabel('x (mm)'); ax.set_ylabel('y (mm)');
+        ax.set_title("Top Down Trajectory")
+        if save:
+          for fmt in fmts:
+            fig.savefig(os.path.join(di,pdir,fi+'_dat-2d.'+fmt))
       # pry
       if 'pry' in plts:
         fig = plt.figure(F); fig.clf(); F += 1
@@ -771,7 +784,6 @@ class Rbt():
               fig.savefig(os.path.join(di,pdir,fi+'_ukf-dxyz.'+fmt))
 
     plt.show()
-
 
 if __name__ == '__main__':
 
