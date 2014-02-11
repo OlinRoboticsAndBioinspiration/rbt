@@ -42,10 +42,11 @@ units = {'opti':'mm','vicon':'mm','phase':'mm'}
 air = ['dat','plt']
 cal = ['dat','plane','cal','plt']
 ukf = ['dat','cal','geom','ukf']#,'plt']
+plot = ['load', 'plt']
 sync = ['dat']
 load = ['load']
 skel = ['dat','geom','plt']
-fitness = ['load','crop', 'mcu']#, 'metrics']
+fitness = ['load','crop', 'mcu', 'metrics']
 def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz',**kwds):
   """
   Process all unprocessed rigid body data
@@ -101,9 +102,6 @@ def do_(fi='',dev=None,trk='rbt',procs=ukf,**kwds):
   rb = Rbt(fi,trk=trk,dev=dev)
   for proc in procs:
     cmd = 'rb.'+proc+'(**kwds)'
-    print cmd
-    print rb
-    print rb.mcu
     eval( cmd )
   return rb
 
@@ -201,7 +199,7 @@ class Rbt():
       s = util.Struct()
       s.read( os.path.join(di,ddir,fi+'_ukf.py'), locals={'array':np.array})
       self.j = s.j; self.u = s.u; 
-    print self.X.shape
+
   def dat(self,N=np.inf,hz0=None,save=True,dbg=True,**kwds):
     """
     Load raw mocap rigid body data
@@ -826,8 +824,7 @@ class Rbt():
     #normalize
     gaus /= np.mean(gaus) 
     gaus /= window
-    print gaus
-    print "GAUS SUM1", np.sum(gaus)
+
     speed_conv = np.convolve(speed, gaus, mode="same")
     #sketch root finding... and cropping....
     find_at_speed = 500
@@ -842,9 +839,6 @@ class Rbt():
     first_idx += margin_seconds * self.hz
     second_idx -= margin_seconds * self.hz
 
-    print first_idx / float(self.hz)
-    print second_idx / float(self.hz)
-
     if 0: #debug
       fig = plt.figure(1)
       ax = fig.add_subplot(111)
@@ -858,7 +852,9 @@ class Rbt():
 
     self.start_trial = first_idx
     self.stop_trial = second_idx
-  def metrics(self, dbg = True, **kwds):
+
+  def metrics(self, dbg = False, **kwds):
+    metrics = {}
 
     t = self.t; X = self.X; j = self.j; u = self.u
     hz = self.hz
@@ -886,7 +882,6 @@ class Rbt():
     gaus = gaussian(window, std)
     gaus /= np.mean(gaus)
     gaus /= float(window)
-    print "Metric gaus som", np.sum(gaus)
     dir_window = np.array([-1,0,1])
     smooth_yaw = np.convolve(yaw, gaus, mode="same")
     d_smooth_yaw = np.convolve(smooth_yaw, dir_window, mode="same") / 2.0 * float(hz)
@@ -897,6 +892,21 @@ class Rbt():
     #get reasonable edges
     bin_low = np.percentile(d_smooth_yaw, 10)
     bin_high = np.percentile(d_smooth_yaw, 90)
+
+    #Write some basic metrics
+    metrics["mean_dyaw"] = np.mean(d_smooth_yaw)
+    metrics["median_dyaw"] = np.median(d_smooth_yaw)
+    metrics["mean_vb"] = np.mean(self.mcu_data[..., self.mcu_j["vb"]])
+    metrics["median_vb"] = np.median(self.mcu_data[..., self.mcu_j["vb"]])
+    metrics["hz"] = float(self.hz)
+    metrics["mocap_points"] = N
+    metrics["mcu_points"] = self.mcu_data.shape[0]
+
+    #save them to file
+    di,fi = os.path.split(self.fi)
+    metrics_file = open(os.path.join(di,fi+"_metrics.py"), "wb+")
+    metrics_file.write("%s" % metrics)
+    metrics_file.close()
 
     if dbg:
       plt.figure(2)
@@ -922,16 +932,13 @@ class Rbt():
       plt.title("2d Trajectory")
 
       plt.show()
-    print "metrics"
 
-  def mcu(self, **kwds):
-    print "Getting MCU stats"
+  def mcu(self, dbg=False, **kwds):
     di,fi = os.path.split(self.fi)
-    print self.fi
     mcu_data = np.loadtxt(os.path.join(di,fi+"_mcu.csv"),delimiter=",")
     run_config = eval(open(os.path.join(di,fi+"_cfg.py")).read())
     mcu_j = run_config["rid"]["mcu_j"]
-    #mcu_data = mcu_data[start[:, ...]
+
     #kill the nans by finding timestamps at 4294967295
     time = mcu_data[..., mcu_j['t']]
     dtime = np.diff(time)
@@ -948,14 +955,12 @@ class Rbt():
 
     #TODO check this math. Taken from old benchmark script
     mcu_data[..., mcu_j['vb']] = mcu_data[..., mcu_j['vb']] * 2 * 3.3 / 1023.0
-    plt.plot(mcu_data[..., mcu_j['vb']])
-    plt.xlabel("time (samples)")
-    plt.ylabel("voltage")
-    plt.title("Battery voltage over run")
-    plt.show()
-    print run_config
-    print mcu_data
-
+    if dbg:
+      plt.plot(mcu_data[..., mcu_j['vb']])
+      plt.xlabel("time (samples)")
+      plt.ylabel("voltage")
+      plt.title("Battery voltage over run")
+      plt.show()
     self.mcu_data = mcu_data
     self.mcu_j = mcu_j
 if __name__ == '__main__':
