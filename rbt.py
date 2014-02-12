@@ -836,6 +836,7 @@ class Rbt():
     #sketch root finding... and cropping....
     find_at_speed = 500
     split_seconds = 2
+    margin_seconds = (.4, .2)
 
     first_bit = np.abs(speed_conv[0:self.hz*split_seconds] - find_at_speed)
     first_idx = np.argmin(first_bit)
