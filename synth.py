@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 from util import files,geom,num,util
 
-def synth(di):
+def synth(di, take_valid=True):
   """
   Collect all of the metrics files for anylisis
   Returns X, j
@@ -24,7 +24,14 @@ def synth(di):
     data, names = get_metrics(dfi)
     assert names == j_flat
     data_array.append(data)
-  return np.vstack(data_array), {k:i for i,k in enumerate(j_flat)}
+  base_files = [''.join(x.split("_")[0:-1]) for x in dfis]
+  data = np.vstack(data_array)
+  keys = {k:i for i,k in enumerate(j_flat)}
+  valid_entries = data[..., keys["is_valid"]] == 1
+  print -np.sum(valid_entries-1), "bad trials"
+  data = data[valid_entries, ...]
+  return data, keys, base_files
+
 
 def get_metrics(filename):
   """
@@ -33,6 +40,5 @@ def get_metrics(filename):
   """
   dict_str = open(filename).read()
   data_dict = eval(dict_str)
-  print data_dict.keys()
   flat = [data_dict[x] for x in data_dict.keys()]
   return flat, data_dict.keys()

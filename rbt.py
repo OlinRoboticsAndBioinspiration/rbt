@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 
 from util import files,geom,num,util
 from scipy.signal import gaussian
+from joblib import Parallel, delayed
 
 m2mm = 1000.
 deg2rad = np.pi / 180.
@@ -47,7 +48,7 @@ sync = ['dat']
 load = ['load']
 skel = ['dat','geom','plt']
 fitness = ['load','crop', 'mcu', 'metrics']
-def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz',**kwds):
+def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz', n_jobs=1, **kwds):
   """
   Process all unprocessed rigid body data
 
@@ -67,13 +68,17 @@ def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz',**kwds):
   sfx = dsfx[dev]
   dfis = glob( os.path.join(di, '*'+sfx) )
   efis = glob( os.path.join(di, ddir, '*'+exclude) )
-  rbs = []
+  good_files= []
   for dfi in dfis:
     _,fi = os.path.split(dfi)
     fi = fi.split(sfx)[0]
     if dev == 'phase' or '_' not in fi:
       if os.path.join(di, ddir, fi+exclude) not in efis:
-        rbs.append( do_(os.path.join(di,fi),dev=dev,trk=trk,procs=procs,**kwds) )
+        good_files.append(os.path.join(di, fi))
+
+  rbs = Parallel(n_jobs=n_jobs)(
+      delayed(do_)(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files)
+  print rbs
   return rbs
 
 def do_(fi='',dev=None,trk='rbt',procs=ukf,**kwds):
@@ -152,6 +157,9 @@ class Rbt():
     #for mcu
     self.mcu_data = None #MCU data
     self.mcu_j = None #MCU labels
+
+    #for metrics
+    self.is_valid = True
 
     self.trk = trk
     self.dev = dev
@@ -594,7 +602,6 @@ class Rbt():
       Qd = np.hstack( ( Qd, Qd[-6:]*1e-1) )
     b = body.Mocap( X0, g.T, viz=viz, Qd=Qd ); 
     b.Ninit = Ninit;
-    self.b = b
     print 'running ukf on %d samps' % N; ti = time()
     t = t[:N]
     j = dict(pitch=0,roll=1,yaw=2,x=3,y=4,z=5,dpitch=6, droll=7, dyaw=8, dx=9, dy=10, dz=11)
@@ -829,15 +836,25 @@ class Rbt():
     #sketch root finding... and cropping....
     find_at_speed = 500
     split_seconds = 2
-    margin_seconds = .2
+
     first_bit = np.abs(speed_conv[0:self.hz*split_seconds] - find_at_speed)
     first_idx = np.argmin(first_bit)
 
     second_bit = np.abs(speed_conv[self.hz*split_seconds:] - find_at_speed)
     second_idx = np.argmin(second_bit) + split_seconds * self.hz
+    print first_idx / float(self.hz)
+    print second_idx / float(self.hz)
 
-    first_idx += margin_seconds * self.hz
-    second_idx -= margin_seconds * self.hz
+    first_idx += margin_seconds[0] * self.hz
+    second_idx -= margin_seconds[1] * self.hz
+
+    if (second_idx - first_idx <= 100):
+      print "ERROR on file" + self.fi
+      print "Crop didn't go according to plan"
+      print "Consider removing or looking at"
+      first_idx = 0
+      second_idx = N
+      self.is_valid = False
 
     if 0: #debug
       fig = plt.figure(1)
@@ -901,6 +918,7 @@ class Rbt():
     metrics["hz"] = float(self.hz)
     metrics["mocap_points"] = N
     metrics["mcu_points"] = self.mcu_data.shape[0]
+    metrics["is_valid"] = self.is_valid
 
     #save them to file
     di,fi = os.path.split(self.fi)
