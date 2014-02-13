@@ -822,7 +822,7 @@ class Rbt():
               fig.savefig(os.path.join(di,pdir,fi+'_ukf-dxyz.'+fmt))
 
     plt.show()
-  def crop(self,**kwds):
+  def crop(self,dbg=False,**kwds):
     t = self.t; X = self.X; N,_ = X.shape; j = self.j; u = self.u
     speed = np.sqrt(np.diff(X[...,j['x']])**2 + np.diff(X[...,j['y']])**2)*self.hz
     window = 80
@@ -834,15 +834,32 @@ class Rbt():
 
     speed_conv = np.convolve(speed, gaus, mode="same")
     #sketch root finding... and cropping....
-    find_at_speed = 500
+    find_at_speed = 100
     split_seconds = 2
     margin_seconds = (.4, .2)
 
-    first_bit = np.abs(speed_conv[0:self.hz*split_seconds] - find_at_speed)
-    first_idx = np.argmin(first_bit)
+    def bad_root_find():
+      first_bit = np.abs(speed_conv[0:self.hz*split_seconds] - find_at_speed)
+      first_idx = np.argmin(first_bit)
+      second_bit = np.abs(speed_conv[self.hz*split_seconds:] - find_at_speed)
+      second_idx = np.argmin(second_bit) + split_seconds * self.hz
+      return first_idx, second_idx
+    
+    def root_find():
 
-    second_bit = np.abs(speed_conv[self.hz*split_seconds:] - find_at_speed)
-    second_idx = np.argmin(second_bit) + split_seconds * self.hz
+      first_idx = 0
+      for idx in range(self.hz*split_seconds):
+        if speed_conv[idx] >= find_at_speed:
+          first_idx = idx
+          break
+      for idx in range(self.hz*split_seconds, len(speed_conv)):
+        if speed_conv[idx] <= find_at_speed:
+          second_idx = idx
+          break
+      return first_idx, second_idx
+
+    first_idx, second_idx = root_find()
+
     print first_idx / float(self.hz)
     print second_idx / float(self.hz)
 
@@ -857,15 +874,27 @@ class Rbt():
       second_idx = N
       self.is_valid = False
 
-    if 0: #debug
+    if dbg:
+      max_speed = np.max(speed_conv)
       fig = plt.figure(1)
       ax = fig.add_subplot(111)
       ax.plot(t[1:N], speed)
-      ax.plot(t[1:N], speed_conv)
-      max_speed = np.max(speed_conv)
-      ax.plot([first_idx / float(self.hz), first_idx / float(self.hz)], [0, max_speed])
-      ax.plot([second_idx / float(self.hz), second_idx / float(self.hz)], [0, max_speed])
+      ax.plot([first_idx / float(self.hz), first_idx / float(self.hz)], [0, max_speed], linewidth=3.0)
+      ax.plot([second_idx / float(self.hz), second_idx / float(self.hz)], [0, max_speed], linewidth=3.0)
       ax.set_ylim(-100.,2100.)
+      ax.set_xlabel("time (s)")
+      ax.set_ylabel("Speed (mm/s)")
+      ax.set_title("Cropping bars on time unsmoothed")
+      
+      fig = plt.figure(2)
+      ax = fig.add_subplot(111)
+      ax.plot(t[1:N], speed_conv)
+      ax.plot([first_idx / float(self.hz), first_idx / float(self.hz)], [0, max_speed], linewidth=3.0)
+      ax.plot([second_idx / float(self.hz), second_idx / float(self.hz)], [0, max_speed], linewidth=3.0)
+      ax.set_ylim(-100.,2100.)
+      ax.set_xlabel("time (s)")
+      ax.set_ylabel("Speed (mm/s)")
+      ax.set_title("Cropping bars on time smoothed")
       plt.show()
 
     self.start_trial = first_idx
@@ -880,7 +909,7 @@ class Rbt():
       X = self.X[self.start_trial : self.stop_trial, ...]
     N,_ = X.shape;
     
-    if dbg:
+    """if dbg:
       fig = plt.figure(1);
       ax = fig.add_subplot(311); ax.grid('on')
       ax.set_title('$x$, $y$, $z$ plot')
@@ -893,6 +922,7 @@ class Rbt():
       ax.plot(t[:N],X[...,j['z']],'r')
       ax.set_ylabel('$z$ (%s)'%u['z'])
       ax.set_xlabel('time (sec)')
+    """
 
     yaw = X[...,j["yaw"]]
     window = 50
@@ -904,15 +934,31 @@ class Rbt():
     smooth_yaw = np.convolve(yaw, gaus, mode="same")
     d_smooth_yaw = np.convolve(smooth_yaw, dir_window, mode="same") / 2.0 * float(hz)
     #lop of the ends to account for convolution irregularities
-    d_smooth_yaw = d_smooth_yaw[0:-window]
-    smooth_yaw = smooth_yaw[0:-window]
-    N = N-window
+    d_smooth_yaw = d_smooth_yaw[window:-window]
+    smooth_yaw = smooth_yaw[window:-window]
+    N = N-window*2
     #get reasonable edges
+
     bin_low = np.percentile(d_smooth_yaw, 10)
     bin_high = np.percentile(d_smooth_yaw, 90)
+    trimmed_d_smooth_yaw = d_smooth_yaw[d_smooth_yaw > bin_low]
+    trimmed_d_smooth_yaw = d_smooth_yaw[trimmed_d_smooth_yaw < bin_high]
+
+    print "Bins", bin_low, bin_high
+    bins = np.linspace(bin_low, bin_high, 20)
+    print bins
+    data, bins = np.histogram(trimmed_d_smooth_yaw, bins)
+    max_bin = np.argmax(data)
+    hist_mode_dyaw = bins[max_bin]
+    print "LENGTH DATA"
+    print data
+    print bins
+    print "-======"
 
     #Write some basic metrics
     metrics["mean_dyaw"] = np.mean(d_smooth_yaw)
+    metrics["trimmed_mean_dyaw"] = np.mean(trimmed_d_smooth_yaw)
+    metrics["hist_mode_dyaw"] = hist_mode_dyaw
     metrics["median_dyaw"] = np.median(d_smooth_yaw)
     metrics["mean_vb"] = np.mean(self.mcu_data[..., self.mcu_j["vb"]])
     metrics["median_vb"] = np.median(self.mcu_data[..., self.mcu_j["vb"]])
@@ -926,6 +972,7 @@ class Rbt():
     metrics_file = open(os.path.join(di,fi+"_metrics.py"), "wb+")
     metrics_file.write("%s" % metrics)
     metrics_file.close()
+    print metrics
 
     if dbg:
       plt.figure(2)
@@ -933,6 +980,8 @@ class Rbt():
       plt.xlabel("time (s)")
       plt.ylabel("degrees/s")
       plt.title("Derivative Gaussianed Yaw")
+      bin_low = np.percentile(d_smooth_yaw, 10)
+      bin_high = np.percentile(d_smooth_yaw, 90)
 
       plt.figure(3)
       plt.hist(d_smooth_yaw, np.linspace(bin_low, bin_high, 50))
@@ -941,14 +990,27 @@ class Rbt():
       plt.title("Histogram derivative Yaw")
       plt.figure(4)
       plt.plot(t[:N], smooth_yaw)
+      plt.plot(t[:len(yaw)], yaw)
+      plt.legend(["Smoothed yaw", "yaw"])
       plt.xlabel("time (s)")
       plt.ylabel("angle (degrees)")
       plt.title("Gaussianed Yaw")
       plt.figure(5)
-      plt.plot(X[...,j['x']], X[...,j['y']])
+      x = X[...,j['x']]
+      y = X[...,j['y']]
+      plt.plot(x, y)
       plt.xlabel("x (mm)")
       plt.ylabel("y (mm)")
       plt.title("2d Trajectory")
+      
+      plt.figure(6)
+      vbat = self.mcu_data[..., self.mcu_j["vb"]]
+      min_vbat = np.percentile(vbat, 5)
+      max_vbat = np.percentile(vbat, 95)
+      plt.hist(vbat, np.linspace(min_vbat, max_vbat, 50))
+      plt.xlabel("voltage (V)")
+      plt.ylabel("freqency")
+      plt.title("Histogram battery voltage")
 
       plt.show()
 
