@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 from util import files,geom,num,util
 from scipy.signal import gaussian
 from joblib import Parallel, delayed
+import json
 
 m2mm = 1000.
 deg2rad = np.pi / 180.
@@ -42,7 +43,7 @@ units = {'opti':'mm','vicon':'mm','phase':'mm'}
 
 air = ['dat','plt']
 cal = ['dat','plane','cal','plt']
-ukf = ['dat','cal','geom','ukf']#,'plt']
+ukf = ['dat','cal','geom','ukf', 'json']#,'plt']
 plot = ['load', 'plt']
 sync = ['dat']
 load = ['load']
@@ -836,7 +837,7 @@ class Rbt():
     #sketch root finding... and cropping....
     find_at_speed = 100
     split_seconds = 2
-    margin_seconds = (.4, .2)
+    margin_seconds = (.4, .4)
 
     def bad_root_find():
       first_bit = np.abs(speed_conv[0:self.hz*split_seconds] - find_at_speed)
@@ -866,7 +867,7 @@ class Rbt():
     first_idx += margin_seconds[0] * self.hz
     second_idx -= margin_seconds[1] * self.hz
 
-    if (second_idx - first_idx <= 100):
+    if (second_idx - first_idx <= 250):
       print "ERROR on file" + self.fi
       print "Crop didn't go according to plan"
       print "Consider removing or looking at"
@@ -925,12 +926,13 @@ class Rbt():
     """
 
     yaw = X[...,j["yaw"]]
-    window = 50
-    std = 30
+    window = 140
+    std = 400 
     gaus = gaussian(window, std)
     gaus /= np.mean(gaus)
     gaus /= float(window)
-    dir_window = np.array([-1,0,1])
+    dir_window = [1, 0, -1]
+    print dir_window
     smooth_yaw = np.convolve(yaw, gaus, mode="same")
     d_smooth_yaw = np.convolve(smooth_yaw, dir_window, mode="same") / 2.0 * float(hz)
     #lop of the ends to account for convolution irregularities
@@ -984,7 +986,7 @@ class Rbt():
       bin_high = np.percentile(d_smooth_yaw, 90)
 
       plt.figure(3)
-      plt.hist(d_smooth_yaw, np.linspace(bin_low, bin_high, 50))
+      plt.hist(d_smooth_yaw, np.linspace(bin_low, bin_high, 100))
       plt.xlabel("degree / second")
       plt.ylabel("freqency")
       plt.title("Histogram derivative Yaw")
@@ -999,6 +1001,15 @@ class Rbt():
       x = X[...,j['x']]
       y = X[...,j['y']]
       plt.plot(x, y)
+      time = len(x)
+      num_seconds = time / float(self.hz)
+      interval = .5
+      points = num_seconds / interval
+      bits_idx = [point * interval * float(self.hz) for point in range(int(points))]
+      print bits_idx
+      bits_x = x[bits_idx]
+      bits_y = y[bits_idx]
+      plt.plot(bits_x, bits_y, 'ro')
       plt.xlabel("x (mm)")
       plt.ylabel("y (mm)")
       plt.title("2d Trajectory")
@@ -1044,6 +1055,32 @@ class Rbt():
       plt.show()
     self.mcu_data = mcu_data
     self.mcu_j = mcu_j
+
+  def json(self, dbg=False, **kwds):
+    x_pos = self.X[..., self.j['x']]
+    y_pos = self.X[..., self.j['y']]
+    z_pos = self.X[..., self.j['z']]
+    yaw = self.X[..., self.j['yaw']]
+    pitch = self.X[..., self.j['pitch']]
+    roll = self.X[..., self.j['roll']]
+    obj = {
+            "time": self.t.tolist(),
+            "ukf": {
+                'x':x_pos.tolist(),
+                'y':y_pos.tolist(),
+                'z':z_pos.tolist(),
+                'yaw':yaw.tolist(),
+                'pitch':pitch.tolist(),
+                'roll':roll.tolist()
+                }
+            }
+
+    json_dumps = json.dumps(obj);
+    json_file_name = self.fi +  ".json";
+    json_file = open(json_file_name, 'wb_')
+    json_file.write(json_dumps)
+    json_file.close()
+    
 if __name__ == '__main__':
 
   rb = Rbt('test1.csv', dev='opti')
