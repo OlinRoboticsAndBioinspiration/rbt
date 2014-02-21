@@ -31,6 +31,7 @@ rad2deg = 180. / np.pi
 
 fmts = ['png']
 cdir = 'cal'
+visDir = 'vis_template'
 ddir = 'dat'
 pdir = 'plt'
 
@@ -1080,9 +1081,18 @@ class Rbt():
     json_file = open(json_file_name, 'wb_')
     json_file.write(json_dumps)
     json_file.close()
-    
-if __name__ == '__main__':
 
+  def vis3d(self, dbg=False, **kwds):
+    current_location = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
+    template_loc = os.path.join(current_location, "template.html")
+    template = open(template_loc, 'r+').read()
+    json = open(self.fi + ".json", 'r+').read()
+    html_out = open(self.fi + "_vis.html", 'wb+')
+    template = template.replace("JSON_DATA_REPLACE", json)
+    html_out.write(template)
+    html_out.close()
+
+if __name__ == '__main__':
   rb = Rbt('test1.csv', dev='opti')
   rb.dat()
   rb.ukf(viz=100,ord=0)
