@@ -91,10 +91,15 @@ function set_state(idx) {
   var tx = rbtData.ukf.x[on_idx];
   var ty = rbtData.ukf.y[on_idx];
   var tz = rbtData.ukf.z[on_idx];
-  mesh.position.x = tx;
+
+  var cx = rbtData.center[0];
+  var cy = rbtData.center[1];
+
+  mesh.position.x = -(tx - cx);
   //Sswap z and y
   mesh.position.y = tz + 15; //Make up for box height of 30
-  mesh.position.z = ty;
+  mesh.position.z = ty - cy;
+
 
   var tyaw = rbtData.ukf.yaw[on_idx];
   var tpitch = rbtData.ukf.pitch[on_idx];
@@ -103,8 +108,8 @@ function set_state(idx) {
 
   //because of zy swap, these change these aswell
   mesh.rotation.y = tyaw * toRad
-  mesh.rotation.z = tpitch * toRad;
-  mesh.rotation.x = troll * toRad;
+  //mesh.rotation.z = tpitch * toRad;
+  //mesh.rotation.x = troll * toRad;
 }
 
 function animate() {

@@ -22,6 +22,8 @@ import matplotlib.pyplot as plt
 
 from util import files,geom,num,util
 from scipy.signal import gaussian
+from scipy import optimize
+from scipy import stats
 from joblib import Parallel, delayed
 import json
 
@@ -31,9 +33,10 @@ rad2deg = 180. / np.pi
 
 fmts = ['png']
 cdir = 'cal'
-visDir = 'vis_template'
+vis_dir = "vis"
 ddir = 'dat'
 pdir = 'plt'
+metrics_dir = 'metrics'
 
 devs = ['opti','vicon','phase']
 dsfx = {'opti':'_mocap.csv','vicon':'.dcr','phase':'.txt'}
@@ -49,7 +52,7 @@ plot = ['load', 'plt']
 sync = ['dat']
 load = ['load']
 skel = ['dat','geom','plt']
-fitness = ['load','crop', 'mcu', 'metrics']
+fitness = ['load','crop', 'mcu', 'circle_fit', 'cfg_metrics', 'metrics']
 def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz', n_jobs=1, **kwds):
   """
   Process all unprocessed rigid body data
@@ -80,7 +83,6 @@ def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz', n_jobs=1, **kwds):
 
   rbs = Parallel(n_jobs=n_jobs)(
       delayed(do_)(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files)
-  print rbs
   return rbs
 
 def do_(fi='',dev=None,trk='rbt',procs=ukf,**kwds):
@@ -162,6 +164,7 @@ class Rbt():
 
     #for metrics
     self.is_valid = True
+    self.metrics_data = {}
 
     self.trk = trk
     self.dev = dev
@@ -624,7 +627,7 @@ class Rbt():
     return X
 
   def plt(self,fmts=fmts,plts=['3d','2d','pd','xyz0','xyz','dxyz','pry','dpry', 'exp'],
-          save=True,**kwds):
+          save=True, show=True, crop=False, **kwds):
     """
     Plot trajectory data 
     Inputs:
@@ -708,6 +711,7 @@ class Rbt():
         H,_ = np.histogramdd( samps, bins )
         w = bins[2][1:]# + np.diff(bins[2]))
         im = np.sum( H * w, axis=2 )
+
         fig = plt.figure(F); fig.clf(); F += 1
         ax = fig.add_subplot(111)
         plt.imshow( im, interpolation='nearest' )
@@ -721,6 +725,10 @@ class Rbt():
     # ukf data
     if self.X is not None:
       t = self.t; X = self.X; N,_ = X.shape; j = self.j; u = self.u
+
+      if crop:
+          t = self.t[self.start_trial : self.stop_trial, ...]
+          X = self.X[self.start_trial : self.stop_trial, ...]
       #s = util.Struct()
       #s.read(os.path.join(di,ddir,fi+'_ukf.py'),locals={'array':np.array})
       #j = s.j; u = s.u
@@ -761,10 +769,20 @@ class Rbt():
           for fmt in fmts:
             fig.savefig(os.path.join(di,pdir,fi+'_ukf-xyz.'+fmt))
       if '2d' in plts:
+
         fig = plt.figure(F); fig.clf(); F += 1
         ax = fig.add_subplot(111)
         ax.plot(X[...,j['x']],
                    X[...,j['y']])
+        num_points = X[..., j["x"]].shape[0] / self.hz + 1
+        print num_points
+        print self.hz
+        x_every = [X[int(indx * self.hz), j['x']] for indx in range(num_points)]
+        y_every = [X[int(indx * self.hz), j['y']] for indx in range(num_points)]
+        print x_every
+        ax.plot(x_every, y_every, 'go')
+        ax.plot(X[0, j['x']], X[0, j['y']], "ro")
+
         ax.set_xlabel('x (mm)'); ax.set_ylabel('y (mm)');
         ax.set_title("Top Down Trajectory")
         if save:
@@ -823,7 +841,9 @@ class Rbt():
             for fmt in fmts:
               fig.savefig(os.path.join(di,pdir,fi+'_ukf-dxyz.'+fmt))
 
-    plt.show()
+    if show:
+        plt.show()
+
   def crop(self,dbg=False,**kwds):
     t = self.t; X = self.X; N,_ = X.shape; j = self.j; u = self.u
     speed = np.sqrt(np.diff(X[...,j['x']])**2 + np.diff(X[...,j['y']])**2)*self.hz
@@ -850,6 +870,7 @@ class Rbt():
     def root_find():
 
       first_idx = 0
+      second_idx = 0
       for idx in range(self.hz*split_seconds):
         if speed_conv[idx] >= find_at_speed:
           first_idx = idx
@@ -861,9 +882,6 @@ class Rbt():
       return first_idx, second_idx
 
     first_idx, second_idx = root_find()
-
-    print first_idx / float(self.hz)
-    print second_idx / float(self.hz)
 
     first_idx += margin_seconds[0] * self.hz
     second_idx -= margin_seconds[1] * self.hz
@@ -903,7 +921,6 @@ class Rbt():
     self.stop_trial = second_idx
 
   def metrics(self, dbg = False, **kwds):
-    metrics = {}
 
     t = self.t; X = self.X; j = self.j; u = self.u
     hz = self.hz
@@ -933,7 +950,6 @@ class Rbt():
     gaus /= np.mean(gaus)
     gaus /= float(window)
     dir_window = [1, 0, -1]
-    print dir_window
     smooth_yaw = np.convolve(yaw, gaus, mode="same")
     d_smooth_yaw = np.convolve(smooth_yaw, dir_window, mode="same") / 2.0 * float(hz)
     #lop of the ends to account for convolution irregularities
@@ -947,35 +963,39 @@ class Rbt():
     trimmed_d_smooth_yaw = d_smooth_yaw[d_smooth_yaw > bin_low]
     trimmed_d_smooth_yaw = d_smooth_yaw[trimmed_d_smooth_yaw < bin_high]
 
-    print "Bins", bin_low, bin_high
     bins = np.linspace(bin_low, bin_high, 20)
-    print bins
     data, bins = np.histogram(trimmed_d_smooth_yaw, bins)
     max_bin = np.argmax(data)
     hist_mode_dyaw = bins[max_bin]
-    print "LENGTH DATA"
-    print data
-    print bins
-    print "-======"
 
-    #Write some basic metrics
-    metrics["mean_dyaw"] = np.mean(d_smooth_yaw)
-    metrics["trimmed_mean_dyaw"] = np.mean(trimmed_d_smooth_yaw)
-    metrics["hist_mode_dyaw"] = hist_mode_dyaw
-    metrics["median_dyaw"] = np.median(d_smooth_yaw)
-    metrics["mean_vb"] = np.mean(self.mcu_data[..., self.mcu_j["vb"]])
-    metrics["median_vb"] = np.median(self.mcu_data[..., self.mcu_j["vb"]])
-    metrics["hz"] = float(self.hz)
-    metrics["mocap_points"] = N
-    metrics["mcu_points"] = self.mcu_data.shape[0]
-    metrics["is_valid"] = self.is_valid
+    #Write some basic self.metrics_data
+    self.metrics_data["mean_dyaw"] = np.mean(d_smooth_yaw)
+    self.metrics_data["trimmed_mean_dyaw"] = np.mean(trimmed_d_smooth_yaw)
+    self.metrics_data["hist_mode_dyaw"] = hist_mode_dyaw
+    self.metrics_data["median_dyaw"] = np.median(d_smooth_yaw)
+    self.metrics_data["mean_vb"] = np.mean(self.mcu_data[..., self.mcu_j["vb"]])
+    self.metrics_data["median_vb"] = np.median(self.mcu_data[..., self.mcu_j["vb"]])
+    self.metrics_data["hz"] = float(self.hz)
+    self.metrics_data["mocap_points"] = N
+    self.metrics_data["mcu_points"] = self.mcu_data.shape[0]
+    self.metrics_data["is_valid"] = self.is_valid
+
+    
+    #clean up nans in metrics with zeros
+    for key in self.metrics_data.keys():
+        if self.metrics_data[key] == np.nan:
+            self.metrics_data[key] = 0
+            print "NAN found in key ", key
 
     #save them to file
     di,fi = os.path.split(self.fi)
-    metrics_file = open(os.path.join(di,fi+"_metrics.py"), "wb+")
-    metrics_file.write("%s" % metrics)
-    metrics_file.close()
-    print metrics
+    di = os.path.join(di, metrics_dir)
+    if not os.path.exists(di):
+      os.mkdir(di)
+
+    self.metrics_data_file = open(os.path.join(di,fi+"_metrics.py"), "wb+")
+    self.metrics_data_file.write("%s" % self.metrics_data)
+    self.metrics_data_file.close()
 
     if dbg:
       plt.figure(2)
@@ -1007,7 +1027,6 @@ class Rbt():
       interval = .5
       points = num_seconds / interval
       bits_idx = [point * interval * float(self.hz) for point in range(int(points))]
-      print bits_idx
       bits_x = x[bits_idx]
       bits_y = y[bits_idx]
       plt.plot(bits_x, bits_y, 'ro')
@@ -1025,6 +1044,201 @@ class Rbt():
       plt.title("Histogram battery voltage")
 
       plt.show()
+
+  #private circle fitting algorithms
+  # taken from http://wiki.scipy.org/Cookbook/Least_Squares_Circle
+  def alg_fit_circle(self, x, y):
+    # coordinates of the barycenter
+    x_m = np.mean(x)
+    y_m = np.mean(y)
+    # calculation of the reduced coordinates
+    u = x - x_m
+    v = y - y_m
+    # linear system defining the center in reduced coordinates (uc, vc):
+    #    Suu * uc +  Suv * vc = (Suuu + Suvv)/2
+    #    Suv * uc +  Svv * vc = (Suuv + Svvv)/2
+    Suv  = np.sum(u*v)
+    Suu  = np.sum(u**2)
+    Svv  = np.sum(v**2)
+    Suuv = np.sum(u**2 * v)
+    Suvv = np.sum(u * v**2)
+    Suuu = np.sum(u**3)
+    Svvv = np.sum(v**3)
+    # Solving the linear system
+    A = np.array([ [ Suu, Suv ], [Suv, Svv]])
+    B = np.array([ Suuu + Suvv, Svvv + Suuv ])/2.0
+    uc, vc = np.linalg.solve(A, B)
+    xc = x_m + uc
+    yc = y_m + vc
+    # Calculation of all distances from the center (xc, yc)
+    Ri      = np.sqrt((x-xc)**2 + (y-yc)**2)
+    R       = np.mean(Ri)
+    #residu  = sum((Ri-R)**2)
+    #residu2 = sum((Ri**2-R**2)**2)
+    return (xc, yc, R)
+
+  def leastsq_fit_circle(self, x, y):
+    x_m = np.mean(x)
+    y_m = np.mean(y)
+    def calc_R(xc, yc):
+        """ calculate the distance of each 2D points from the center (xc, yc) """
+        return np.sqrt((x-xc)**2 + (y-yc)**2)
+
+    def f_2(c):
+        """ calculate the algebraic distance between the data points and the mean circle centered at c=(xc, yc) """
+        Ri = calc_R(*c)
+        return Ri - Ri.mean()
+
+    center_estimate = x_m, y_m
+    center, ier = optimize.leastsq(f_2, center_estimate)
+
+    xc, yc = center
+    Ri       = calc_R(*center)
+    R        = Ri.mean()
+    residu   = np.sum((Ri - R)**2)
+    return (xc, yc, R)
+
+  def circle_fit(self, dbg=False, **kwds):
+    def circle_fit_dist(x, y, length, stride):
+      valid_starts = (x.shape[0] - length)
+      def get_radi(start):
+        end = start+length
+        trial_x = x[start:end]
+        trial_y = y[start:end]
+        (xc, yc, rc) = self.leastsq_fit_circle(trial_x, trial_y)
+        distance = np.sqrt(np.mean((trial_x-xc) ** 2 + (trial_y - yc) ** 2))
+        theta_start = np.arctan2(trial_x[0], trial_y[0])
+        theta_end = np.arctan2(trial_x[-1], trial_y[-1])
+        
+        theta_start = np.arctan2((trial_x[0]-xc)/rc, (trial_y[0]-yc)/rc)
+        theta_end = np.arctan2((trial_x[-1]-xc)/rc, (trial_y[-1]-yc)/rc)
+        direction = np.sign(theta_start - theta_end)
+        if direction == np.nan:
+          direction = 0
+        return (xc, yc, rc, distance, direction)
+
+      circles = [get_radi(indx) for indx in range(0, valid_starts, stride)]
+
+      return np.vstack(circles)
+
+    t = self.t; X = self.X; j = self.j; u = self.u
+    hz = self.hz
+    if self.start_trial:
+      X = self.X[self.start_trial : self.stop_trial, ...]
+    else:
+      print "WARNING, not cropping for circle fit. Run crop first"
+    N,_ = X.shape;
+    #use the cropped version
+    x_pos = X[..., self.j['x']]
+    y_pos = X[..., self.j['y']]
+    (xc, yc, rc)= self.leastsq_fit_circle(x_pos, y_pos)
+
+
+    stride = 1
+    #window = 50
+    window = 20
+    #window = 30
+    #window = 100
+    circles = circle_fit_dist(x_pos, y_pos, window, stride)
+    print "Circles shape", circles.shape
+    print "X shape", X.shape
+    if dbg == True:
+        plt.figure()
+        plt.plot(x_pos, y_pos, linewidth=3)
+        xlim = plt.xlim()
+        ylim = plt.ylim()
+
+        period = np.linspace(0, np.pi*2, 100)
+        for xc, yc, rc, distance, direction in circles[0:-1:3,...]:
+            plt.plot(np.sin(period)*rc + xc, np.cos(period)*rc + yc)
+        square_lim = (min(xlim[0], ylim[0]), max(xlim[1], ylim[1]))
+
+        plt.xlim(square_lim)
+        plt.ylim(square_lim)
+        plt.plot(x_pos, y_pos, 'r', linewidth=5)
+        plt.plot(x_pos, y_pos, 'k', linewidth=3)
+
+    # from
+    # http://stackoverflow.com/questions/11882393/matplotlib-disregard-outliers-when-plotting
+    def is_outlier(points, thresh=3.5):
+        if len(points.shape) == 1:
+            points = points[:,None]
+        median = np.median(points, axis=0)
+        diff = np.sum((points - median)**2, axis=-1)
+        diff = np.sqrt(diff)
+        med_abs_deviation = np.median(diff)
+        modified_z_score = 0.6745 * diff / med_abs_deviation
+        return modified_z_score > thresh
+    radi = circles[..., 2]
+    dists = circles[..., 3]
+    direction = circles[..., 4]
+
+    curvature = 1/(radi * direction)
+    outlier_curvature = curvature[~is_outlier(curvature)]
+
+    mean_radi = np.mean(radi * direction)
+    self.metrics_data["mean_circle_fit_radius"] = mean_radi
+    mean_curvature = np.mean(outlier_curvature)
+    self.metrics_data["mean_circle_fit_curvature"] = mean_curvature
+    median_curvature = np.median(outlier_curvature)
+    self.metrics_data["median_circle_fit_curvature"] = median_curvature
+
+    if dbg == True:
+        plt.figure()
+        scaled_t = t[0:circles[..., 2].shape[0]*stride:stride]
+        plt.semilogy(scaled_t, radi)
+        print mean_radi
+        mean_radi = np.mean(radi)
+        plt.semilogy([0, scaled_t[-1]+1], [mean_radi, mean_radi], "r", linewidth=3)
+        plt.title("semilog radi")
+        plt.xlabel("time (s)")
+        plt.ylabel("radi (mm)")
+        plt.figure()
+
+        scaled_t = scaled_t[~is_outlier(curvature)]
+        direction = direction[~is_outlier(curvature)]
+        radi = radi[~is_outlier(curvature)]
+        curvature = curvature[~is_outlier(curvature)]
+
+        negradi = radi[direction == -1]
+        negt = scaled_t[direction == -1]
+        posradi = radi[direction == 1]
+        post = scaled_t[direction == 1]
+        plt.semilogy(negt, negradi, 'o', c=(1, 0, 0))
+        plt.semilogy(post, posradi, 'o', c=(0, 0, 1))
+        plt.legend(["neg direction", "pos direction"])
+        #plt.semilogy([0, scaled_t[-1]+1], [mean_radi, mean_radi], "r", linewidth=3)
+        plt.title("semilog radi shifted for neg")
+        plt.xlabel("time (s)")
+        plt.ylabel("radi (mm)")
+        plt.figure()
+        plt.plot(scaled_t, direction, 'o')
+        plt.figure()
+        plt.plot(scaled_t, curvature, 'o')
+        plt.title("curvature vs time")
+        plt.xlabel('time (s)')
+        plt.ylabel("curvature (1/mm)")
+        plt.figure()
+        plt.hist(curvature, bins=100)
+        print "Mean curvature", mean_curvature
+        print "Median curvature", median_curvature
+        #plt.figure()
+        #plt.plot(scaled_t, 1.0/radi)
+        #plt.figure()
+        #plt.plot(scaled_t, radi*direction)
+        #plt.errorbar(scaled_t, radi, yerr=dists)
+
+        #plt.hist(np.log(radi), bins=50)
+        plt.show()
+
+
+  def cfg_metrics(self, **kwds):
+    di,fi = os.path.split(self.fi)
+    run_config = eval(open(os.path.join(di,fi+"_cfg.py")).read())
+    file_name = run_config["cfg_file"]
+    cfgs = file_name.split(".")[0].split("x")
+    self.metrics_data["motor_cfg_0"] = float(cfgs[0])
+    self.metrics_data["motor_cfg_1"] = float(cfgs[1])
 
   def mcu(self, dbg=False, **kwds):
     di,fi = os.path.split(self.fi)
@@ -1073,7 +1287,8 @@ class Rbt():
                 'yaw':yaw.tolist(),
                 'pitch':pitch.tolist(),
                 'roll':roll.tolist()
-                }
+                },
+            "center":[np.mean(x_pos), np.mean(y_pos)]
             }
 
     json_dumps = json.dumps(obj);
@@ -1083,11 +1298,16 @@ class Rbt():
     json_file.close()
 
   def vis3d(self, dbg=False, **kwds):
+    di,fi = os.path.split(self.fi)
+    di = os.path.join(di, vis_dir)
+    if not os.path.exists( di ):
+      os.mkdir( di )
+
     current_location = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
     template_loc = os.path.join(current_location, "template.html")
     template = open(template_loc, 'r+').read()
     json = open(self.fi + ".json", 'r+').read()
-    html_out = open(self.fi + "_vis.html", 'wb+')
+    html_out = open(os.path.join(di, fi + "_vis.html"), 'wb+')
     template = template.replace("JSON_DATA_REPLACE", json)
     html_out.write(template)
     html_out.close()

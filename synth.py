@@ -1,6 +1,7 @@
 import os
 from time import time
 from glob import glob
+import rbt
 
 import numpy as np
 import numpy.linalg as la
@@ -16,7 +17,9 @@ def synth(di, take_valid=True):
       where X is a N X M matrix where N is number of runs and M is number of metrics
       where j is the labels for M
   """
+  di = os.path.join(di, rbt.metrics_dir)
   dfis = glob( os.path.join(di, '*'+"_metrics.py") )
+  print dfis
 
   data_array = []
   _, j_flat = get_metrics(dfis[0])
@@ -28,6 +31,7 @@ def synth(di, take_valid=True):
   data = np.vstack(data_array)
   keys = {k:i for i,k in enumerate(j_flat)}
   valid_entries = data[..., keys["is_valid"]] == 1
+  base_files = [base_files[i] for i, e in enumerate(data[..., keys["is_valid"]]) if e == True]
   print -np.sum(valid_entries-1), "bad trials"
   data = data[valid_entries, ...]
   return data, keys, base_files
@@ -39,6 +43,7 @@ def get_metrics(filename):
   returns 1XM matrix
   """
   dict_str = open(filename).read()
+  print filename
   data_dict = eval(dict_str)
   flat = [data_dict[x] for x in data_dict.keys()]
   return flat, data_dict.keys()
