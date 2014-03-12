@@ -4,59 +4,21 @@ from util import files,geom,num,util
 import matplotlib.pyplot as plt
 from scipy import optimize
 
-# taken from http://wiki.scipy.org/Cookbook/Least_Squares_Circle
-def alg_fit_circle(x, y):
-  # coordinates of the barycenter
-  x_m = np.mean(x)
-  y_m = np.mean(y)
-  # calculation of the reduced coordinates
-  u = x - x_m
-  v = y - y_m
-  # linear system defining the center in reduced coordinates (uc, vc):
-  #    Suu * uc +  Suv * vc = (Suuu + Suvv)/2
-  #    Suv * uc +  Svv * vc = (Suuv + Svvv)/2
-  Suv  = np.sum(u*v)
-  Suu  = np.sum(u**2)
-  Svv  = np.sum(v**2)
-  Suuv = np.sum(u**2 * v)
-  Suvv = np.sum(u * v**2)
-  Suuu = np.sum(u**3)
-  Svvv = np.sum(v**3)
-  # Solving the linear system
-  A = np.array([ [ Suu, Suv ], [Suv, Svv]])
-  B = np.array([ Suuu + Suvv, Svvv + Suuv ])/2.0
-  uc, vc = np.linalg.solve(A, B)
-  xc = x_m + uc
-  yc = y_m + vc
-  # Calculation of all distances from the center (xc, yc)
-  Ri      = np.sqrt((x-xc)**2 + (y-yc)**2)
-  R       = np.mean(Ri)
-  #residu  = sum((Ri-R)**2)
-  #residu2 = sum((Ri**2-R**2)**2)
-  return (xc, yc, R)
-
-def leastsq_fit_circle(x, y):
-  x_m = np.mean(x)
-  y_m = np.mean(y)
-  def calc_R(xc, yc):
-      """ calculate the distance of each 2D points from the center (xc, yc) """
-      return np.sqrt((x-xc)**2 + (y-yc)**2)
-
-  def f_2(c):
-      """ calculate the algebraic distance between the data points and the mean circle centered at c=(xc, yc) """
-      Ri = calc_R(*c)
-      return Ri - Ri.mean()
-
-  center_estimate = x_m, y_m
-  center, ier = optimize.leastsq(f_2, center_estimate)
-
-  xc, yc = center
-  Ri       = calc_R(*center)
-  R        = Ri.mean()
-  residu   = np.sum((Ri - R)**2)
-  return (xc, yc, R)
-
 def circle_fit(self, dbg=False, **kwds):
+  """
+  Estimate curvature of the data by fitting many circles to different
+  areas of the data.
+
+  Prerequisites: {dat ukf | load}
+    Optionally crop
+
+  Effects: 
+    Sets the following metrics
+      self.metrics_data["mean_circle_fit_radius"]
+      self.metrics_data["mean_circle_fit_curvature"]
+      self.metrics_data["median_circle_fit_curvature"]
+
+  """
   def circle_fit_dist(x, y, length, stride):
     valid_starts = (x.shape[0] - length)
     def get_radi(start):
@@ -188,4 +150,56 @@ def circle_fit(self, dbg=False, **kwds):
 
       #plt.hist(np.log(radi), bins=50)
       plt.show()
+
+# taken from http://wiki.scipy.org/Cookbook/Least_Squares_Circle
+def alg_fit_circle(x, y):
+  # coordinates of the barycenter
+  x_m = np.mean(x)
+  y_m = np.mean(y)
+  # calculation of the reduced coordinates
+  u = x - x_m
+  v = y - y_m
+  # linear system defining the center in reduced coordinates (uc, vc):
+  #    Suu * uc +  Suv * vc = (Suuu + Suvv)/2
+  #    Suv * uc +  Svv * vc = (Suuv + Svvv)/2
+  Suv  = np.sum(u*v)
+  Suu  = np.sum(u**2)
+  Svv  = np.sum(v**2)
+  Suuv = np.sum(u**2 * v)
+  Suvv = np.sum(u * v**2)
+  Suuu = np.sum(u**3)
+  Svvv = np.sum(v**3)
+  # Solving the linear system
+  A = np.array([ [ Suu, Suv ], [Suv, Svv]])
+  B = np.array([ Suuu + Suvv, Svvv + Suuv ])/2.0
+  uc, vc = np.linalg.solve(A, B)
+  xc = x_m + uc
+  yc = y_m + vc
+  # Calculation of all distances from the center (xc, yc)
+  Ri      = np.sqrt((x-xc)**2 + (y-yc)**2)
+  R       = np.mean(Ri)
+  #residu  = sum((Ri-R)**2)
+  #residu2 = sum((Ri**2-R**2)**2)
+  return (xc, yc, R)
+
+def leastsq_fit_circle(x, y):
+  x_m = np.mean(x)
+  y_m = np.mean(y)
+  def calc_R(xc, yc):
+      """ calculate the distance of each 2D points from the center (xc, yc) """
+      return np.sqrt((x-xc)**2 + (y-yc)**2)
+
+  def f_2(c):
+      """ calculate the algebraic distance between the data points and the mean circle centered at c=(xc, yc) """
+      Ri = calc_R(*c)
+      return Ri - Ri.mean()
+
+  center_estimate = x_m, y_m
+  center, ier = optimize.leastsq(f_2, center_estimate)
+
+  xc, yc = center
+  Ri       = calc_R(*center)
+  R        = Ri.mean()
+  residu   = np.sum((Ri - R)**2)
+  return (xc, yc, R)
 

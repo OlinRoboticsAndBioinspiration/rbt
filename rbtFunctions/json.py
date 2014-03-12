@@ -2,6 +2,13 @@ import numpy as np
 import json
 
 def json(self, dbg=False, **kwds):
+  """
+  Dump ukf data to json file
+
+  Prerequisites: {ukf | load}
+  Effects:
+    Creates json file and saves to disk.
+  """
   x_pos = self.X[..., self.j['x']]
   y_pos = self.X[..., self.j['y']]
   z_pos = self.X[..., self.j['z']]

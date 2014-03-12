@@ -4,6 +4,15 @@ from util import files,geom,num,util
 from scipy.signal import gaussian
 
 def crop(self,dbg=False,**kwds):
+  """
+  Estimates when the robot starts and stops running. Tries to remove start up noise as well as ending irregularities.
+
+  Prerequisites: {ukf| load}
+  Writes: 
+        self.start_trial
+        self.stop_trial
+        (self.is_valid)
+  """
   t = self.t; X = self.X; N,_ = X.shape; j = self.j; u = self.u
   speed = np.sqrt(np.diff(X[...,j['x']])**2 + np.diff(X[...,j['y']])**2)*self.hz
   window = 80
