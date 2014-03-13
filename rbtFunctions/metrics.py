@@ -5,6 +5,12 @@ from scipy.signal import gaussian
 
 metrics_dir = 'metrics'
 def metrics(self, dbg = False, **kwds):
+  """
+  Saves various statistics and metrics about the run. Writes metrics to file.
+
+  Prerequisites: {ukf, load} crop mcu
+  Effects: Writes metrics python dictionary
+  """
 
   t = self.t; X = self.X; j = self.j; u = self.u
   hz = self.hz

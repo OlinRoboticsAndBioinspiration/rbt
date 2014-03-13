@@ -3,6 +3,11 @@ import os
 vis_dir = "vis"
 
 def vis3d(self, dbg=False, **kwds):
+  """
+  Used for visualization of raw robot run
+  Prerequisites: {ukf | load} json
+  Effects: Writes a html file with webgl visualization
+  """
   di,fi = os.path.split(self.fi)
   di = os.path.join(di, vis_dir)
   if not os.path.exists( di ):

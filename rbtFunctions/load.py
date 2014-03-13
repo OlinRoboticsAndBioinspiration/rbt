@@ -10,6 +10,7 @@ def load(rbt,fi=None,dbg=True):
 
   Inputs:
     fi - str - processed data file, *_dat.npz
+  Effects: Loads ukf data to instance
   """
   if (not fi) and (rbt.fi):
     fi = rbt.fi

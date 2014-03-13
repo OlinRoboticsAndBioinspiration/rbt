@@ -10,7 +10,6 @@ pdir = 'plt'
 
 def plt(self,fmts=fmts,plts=['3d','2d','pd','xyz0','xyz','dxyz','pry','dpry', 'exp'],
         save=True, show=True, crop=False, **kwds):
-  import matplotlib.pyplot as plt
   """
   Plot trajectory data 
   Inputs:
@@ -21,6 +20,9 @@ def plt(self,fmts=fmts,plts=['3d','2d','pd','xyz0','xyz','dxyz','pry','dpry', 'e
   Effects:
     - generates & saves plots
   """
+  
+  import matplotlib.pyplot as plt
+
   di,fi = os.path.split(self.fi)
   dir = os.path.join(di,pdir)
   if save:
