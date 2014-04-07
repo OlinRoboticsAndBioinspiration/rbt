@@ -17,7 +17,7 @@ import sys
 from time import time
 from glob import glob
 from rbtFunctions import load, crop, mcu, circle_fit, cal
-from rbtFunctions import dat, geom, json, ukf, plt, plane
+from rbtFunctions import dat, geom, json_task, ukf, plt, plane
 from rbtFunctions import vis3d, cfg_metrics, metrics
 
 import numpy as np
@@ -29,10 +29,14 @@ from joblib import Parallel, delayed
 
 air = ['dat','plt']
 cal_task = ['dat','plane','cal','plt']
-ukf_task = ['dat','cal','geom','ukf', 'json']#,'plt']
+ukf_task = ['dat','cal','geom','ukf', 'json_task']#,'plt']
 plot = ['load', 'plt']
 skel = ['dat','geom','plt']
 fitness = ['load','crop', 'mcu', 'circle_fit', 'cfg_metrics', 'metrics']
+
+dsfx = {'opti':'_mocap.csv','vicon':'.dcr','phase':'.txt'}
+ddir = 'dat'
+
 def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz', n_jobs=1, **kwds):
   """
   Process all unprocessed rigid body data
@@ -60,11 +64,13 @@ def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz', n_jobs=1, **kwds):
       if os.path.join(di, ddir, fi+exclude) not in efis:
         good_files.append(os.path.join(di, fi))
 
+  print good_files
   rbs = Parallel(n_jobs=n_jobs)(
       delayed(do_)(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files)
+  print "Finished running through files"
   return rbs
 
-def do_(fi='',dev=None,trk='rbt',procs=ukf,**kwds):
+def do_(fi='',dev=None,trk='rbt',procs=[],**kwds):
   """
   Process mocap data, run ukf, generate plots from rigid body data 
 

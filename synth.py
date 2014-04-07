@@ -17,14 +17,17 @@ def synth(di, take_valid=True):
       where X is a N X M matrix where N is number of runs and M is number of metrics
       where j is the labels for M
   """
-  di = os.path.join(di, rbt.metrics_dir)
+  #TODO move configuration (metrics dir name) to global config
+  di = os.path.join(di, "metrics")
   dfis = glob( os.path.join(di, '*'+"_metrics.py") )
   print dfis
 
   data_array = []
   _, j_flat = get_metrics(dfis[0])
+  print j_flat
   for dfi in dfis:
     data, names = get_metrics(dfi)
+    print names
     assert names == j_flat
     data_array.append(data)
   base_files = [''.join(x.split("_")[0:-1]) for x in dfis]

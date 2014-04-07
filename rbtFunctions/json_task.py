@@ -1,7 +1,7 @@
 import numpy as np
 import json
 
-def json(self, dbg=False, **kwds):
+def json_task(self, dbg=False, **kwds):
   """
   Dump ukf data to json file
 

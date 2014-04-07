@@ -192,9 +192,9 @@ def dat(self,N=np.inf,hz0=None,save=True,dbg=True,**kwds):
       try:
         # align time samples with sync electronics
         args = dict(fi=self.fi,dev='opti',procs=sync,dbg=False,save=False)
-        l = rbt.do_(trk='l',**args).d
+        l = rbt.rbt.do_(trk='l',**args).d
         l = np.mean( np.isnan( np.reshape( l, (l.shape[0],-1) ) ), axis=1 )
-        r = rbt.do_(trk='r',**args).d
+        r = rbt.rbt.do_(trk='r',**args).d
         r = np.mean( np.isnan( np.reshape( r, (r.shape[0],-1) ) ), axis=1 )
         j = (.5*(l + r) < .9).nonzero()[0]
         t = t[j] - t[j[0]]; d = d[j,...]
@@ -227,9 +227,9 @@ def dat(self,N=np.inf,hz0=None,save=True,dbg=True,**kwds):
   if save:
     # save data
     s = util.Struct(hz=hz,trk=trk,dev=dev)
-    dir = os.path.join(di,ddir)
-    if not os.path.exists( dir ):
-      os.mkdir( dir )
-    s.write( os.path.join(dir,fi+'_dat.py') )
-    np.savez(os.path.join(dir,fi+'_dat.npz'),t=t,d=d,hz=hz)
+    ndir = os.path.join(di,ddir)
+    if not os.path.exists( ndir ):
+      os.mkdir( ndir )
+    s.write( os.path.join(ndir,fi+'_dat.py') )
+    np.savez(os.path.join(ndir,fi+'_dat.npz'),t=t,d=d,hz=hz)
 
