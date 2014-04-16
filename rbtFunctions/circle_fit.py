@@ -12,7 +12,7 @@ def circle_fit(self, dbg=False, **kwds):
   Prerequisites: {dat ukf | load}
     Optionally crop
 
-  Effects: 
+  Effects:
     Sets the following metrics
       self.metrics_data["mean_circle_fit_radius"]
       self.metrics_data["mean_circle_fit_curvature"]
@@ -29,7 +29,7 @@ def circle_fit(self, dbg=False, **kwds):
       distance = np.sqrt(np.mean((trial_x-xc) ** 2 + (trial_y - yc) ** 2))
       theta_start = np.arctan2(trial_x[0], trial_y[0])
       theta_end = np.arctan2(trial_x[-1], trial_y[-1])
-      
+
       theta_start = np.arctan2((trial_x[0]-xc)/rc, (trial_y[0]-yc)/rc)
       theta_end = np.arctan2((trial_x[-1]-xc)/rc, (trial_y[-1]-yc)/rc)
       direction = np.sign(theta_start - theta_end)
@@ -57,8 +57,7 @@ def circle_fit(self, dbg=False, **kwds):
   stride = 1
   #window = 50
   window = 20
-  #window = 30
-  #window = 100
+  window = 40
   circles = circle_fit_dist(x_pos, y_pos, window, stride)
   print "Circles shape", circles.shape
   print "X shape", X.shape
@@ -69,7 +68,7 @@ def circle_fit(self, dbg=False, **kwds):
       ylim = plt.ylim()
 
       period = np.linspace(0, np.pi*2, 100)
-      for xc, yc, rc, distance, direction in circles[0:-1:3,...]:
+      for xc, yc, rc, distance, direction in circles[0:-1:10,...]:
           plt.plot(np.sin(period)*rc + xc, np.cos(period)*rc + yc)
       square_lim = (min(xlim[0], ylim[0]), max(xlim[1], ylim[1]))
 
@@ -103,17 +102,83 @@ def circle_fit(self, dbg=False, **kwds):
   median_curvature = np.median(outlier_curvature)
   self.metrics_data["median_circle_fit_curvature"] = median_curvature
 
+  scaled_t = t[0:circles[..., 2].shape[0]*stride:stride]
   if dbg == True:
       plt.figure()
+      plt.semilogy(scaled_t, dists)
+      plt.xlabel("time")
+      plt.ylabel("circle accuracy")
+      plt.title("r^2 of circle fits")
+
+  #trimmed with r^2 values
+  curva_trimmed = np.copy(curvature)
+  curva_trimmed[dists > 5000] = 0
+  if dbg == True:
+      plt.figure()
+      plt.plot(scaled_t, curva_trimmed, 'r')
+      plt.plot(scaled_t, curvature)
+      plt.xlabel("time")
+      plt.ylabel("circle curvature")
+      plt.title("r^2 trimmed curvature")
+      plt.show()
+
+  #Sampled circle fit data
+
+  #rolling median
+  print len(curvature), "length of curvature"
+  def rolling(series, func, win):
+      num_curva = len(series)
+      output = np.zeros((num_curva - win*2, 1))
+      for i in range(win, num_curva -win):
+        segment = series[i-win:i+win]
+        output[i-win] = func(segment)
+      return output
+  win = 30
+  curva_smooth= rolling(curvature, np.median, win)
+  scaled_t = t[0:circles[..., 2].shape[0]*stride:stride]
+  output_t = scaled_t[win:len(curvature)-win]
+  if dbg==True:
+      plt.figure()
+      plt.plot(output_t, curva_smooth)
+      ylim = plt.ylim()
+      plt.plot(scaled_t, curvature)
+      plt.ylim(ylim)
+      plt.legend(["filtered", "raw"])
+      plt.xlabel("time")
+      plt.title("rolling median curvature")
+  #calculate stability
+
+  print "std of entire data", np.std(curvature)
+  variance = rolling(curvature, np.std, win)
+  mean_win = 10
+  variance_smooth = rolling(variance, np.mean, mean_win)
+  if dbg == True:
+      plt.figure()
+      plt.plot(output_t, variance)
+      plt.plot(output_t[mean_win:-mean_win], variance_smooth)
+      plt.title("rolling std")
+      plt.ylabel("std")
+
+  #partition into 4
+  samples = len(variance_smooth)
+  split = samples/4
+  for k in range(4):
+    #select lowest variance
+    segment = variance_smooth[split*k:split*(k+1)]
+    index_in_smoothed = np.argmin(segment) + split*k
+    index_in_curva_smooth = index_in_smoothed + mean_win
+    #get curvature at that point
+    curva = curva_smooth[index_in_curva_smooth]
+    #self.metrics_data["segment"+str(k)+"_circle_fit_curva"] = float(curva)
+    self.metrics_data["segment"+str(k)+"_circle_fit_curva"] = float(np.mean(segment))
+    self.metrics_data["segment"+str(k)+"_circle_fit_std"] = float(np.min(segment))
+
+
+
+  if dbg == True:
       scaled_t = t[0:circles[..., 2].shape[0]*stride:stride]
-      plt.semilogy(scaled_t, radi)
       print mean_radi
       mean_radi = np.mean(radi)
-      plt.semilogy([0, scaled_t[-1]+1], [mean_radi, mean_radi], "r", linewidth=3)
-      plt.title("semilog radi")
-      plt.xlabel("time (s)")
-      plt.ylabel("radi (mm)")
-      plt.figure()
 
       scaled_t = scaled_t[~is_outlier(curvature)]
       direction = direction[~is_outlier(curvature)]
@@ -124,32 +189,21 @@ def circle_fit(self, dbg=False, **kwds):
       negt = scaled_t[direction == -1]
       posradi = radi[direction == 1]
       post = scaled_t[direction == 1]
-      plt.semilogy(negt, negradi, 'o', c=(1, 0, 0))
-      plt.semilogy(post, posradi, 'o', c=(0, 0, 1))
-      plt.legend(["neg direction", "pos direction"])
-      #plt.semilogy([0, scaled_t[-1]+1], [mean_radi, mean_radi], "r", linewidth=3)
-      plt.title("semilog radi shifted for neg")
-      plt.xlabel("time (s)")
-      plt.ylabel("radi (mm)")
-      plt.figure()
-      plt.plot(scaled_t, direction, 'o')
+
       plt.figure()
       plt.plot(scaled_t, curvature, 'o')
       plt.title("curvature vs time")
       plt.xlabel('time (s)')
       plt.ylabel("curvature (1/mm)")
+
       plt.figure()
       plt.hist(curvature, bins=100)
       print "Mean curvature", mean_curvature
       print "Median curvature", median_curvature
-      #plt.figure()
-      #plt.plot(scaled_t, 1.0/radi)
-      #plt.figure()
-      #plt.plot(scaled_t, radi*direction)
-      #plt.errorbar(scaled_t, radi, yerr=dists)
 
       #plt.hist(np.log(radi), bins=50)
       plt.show()
+
 
 # taken from http://wiki.scipy.org/Cookbook/Least_Squares_Circle
 def alg_fit_circle(x, y):
