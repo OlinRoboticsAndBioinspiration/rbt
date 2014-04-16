@@ -170,6 +170,7 @@ def plt(self,fmts=fmts,plts=['3d','2d','pd','xyz0','xyz','dxyz','pry','dpry', 'e
 
       ax.set_xlabel('x (mm)'); ax.set_ylabel('y (mm)');
       ax.set_title("Top Down Trajectory")
+      ax.axis("equal")
       if save:
         for fmt in fmts:
           fig.savefig(os.path.join(di,pdir,fi+'_dat-2d.'+fmt))
