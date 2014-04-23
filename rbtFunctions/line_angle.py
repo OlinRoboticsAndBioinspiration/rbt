@@ -40,9 +40,10 @@ def line_angle(self, dbg=False, **kwds):
       return output
 
   def line_angle(segment):
-      x1 = segment[0, :]
-      x2 = segment[len(segment)/2, :]
-      x3 = segment[-1, :]
+      win = 3
+      x1 = np.mean(segment[0:win, :], axis=0)
+      x2 = np.mean(segment[len(segment)/2-win:len(segment)/2+win, :], axis=0)
+      x3 = np.mean(segment[len(segment)-win-1:len(segment)-1, :], axis=0)
       a = (x1[0] - x2[0], x1[1] - x2[1], 0)
       b = (x3[0] - x2[0], x3[1] - x2[1], 0)
       adist= np.sqrt(a[0] * a[0] + a[1] * a[1])
