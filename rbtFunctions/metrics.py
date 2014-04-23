@@ -17,60 +17,16 @@ def metrics(self, dbg = False, **kwds):
   if self.start_trial:
     X = self.X[self.start_trial : self.stop_trial, ...]
   N,_ = X.shape;
-  
-  """if dbg:
-    fig = plt.figure(1);
-    ax = fig.add_subplot(311); ax.grid('on')
-    ax.set_title('$x$, $y$, $z$ plot')
-    ax.plot(t[:N],X[...,j['x']],'b')
-    ax.set_ylabel('$x$ (%s)'%u['x'])
-    ax = fig.add_subplot(312); ax.grid('on')
-    ax.plot(t[:N],X[...,j['y']],'g')
-    ax.set_ylabel('$y$ (%s)'%u['y'])
-    ax = fig.add_subplot(313); ax.grid('on')
-    ax.plot(t[:N],X[...,j['z']],'r')
-    ax.set_ylabel('$z$ (%s)'%u['z'])
-    ax.set_xlabel('time (sec)')
-  """
-
-  yaw = X[...,j["yaw"]]
-  window = 140
-  std = 400 
-  gaus = gaussian(window, std)
-  gaus /= np.mean(gaus)
-  gaus /= float(window)
-  dir_window = [1, 0, -1]
-  smooth_yaw = np.convolve(yaw, gaus, mode="same")
-  d_smooth_yaw = np.convolve(smooth_yaw, dir_window, mode="same") / 2.0 * float(hz)
-  #lop of the ends to account for convolution irregularities
-  d_smooth_yaw = d_smooth_yaw[window:-window]
-  smooth_yaw = smooth_yaw[window:-window]
-  N = N-window*2
-  #get reasonable edges
-
-  bin_low = np.percentile(d_smooth_yaw, 10)
-  bin_high = np.percentile(d_smooth_yaw, 90)
-  trimmed_d_smooth_yaw = d_smooth_yaw[d_smooth_yaw > bin_low]
-  trimmed_d_smooth_yaw = d_smooth_yaw[trimmed_d_smooth_yaw < bin_high]
-
-  bins = np.linspace(bin_low, bin_high, 20)
-  data, bins = np.histogram(trimmed_d_smooth_yaw, bins)
-  max_bin = np.argmax(data)
-  hist_mode_dyaw = bins[max_bin]
 
   #Write some basic self.metrics_data
-  self.metrics_data["mean_dyaw"] = np.mean(d_smooth_yaw)
-  self.metrics_data["trimmed_mean_dyaw"] = np.mean(trimmed_d_smooth_yaw)
-  self.metrics_data["hist_mode_dyaw"] = hist_mode_dyaw
-  self.metrics_data["median_dyaw"] = np.median(d_smooth_yaw)
   self.metrics_data["mean_vb"] = np.mean(self.mcu_data[..., self.mcu_j["vb"]])
   self.metrics_data["median_vb"] = np.median(self.mcu_data[..., self.mcu_j["vb"]])
+  self.metrics_data["start_vb"] = np.mean(self.mcu_data[..., self.mcu_j["vb"]][0:100])
   self.metrics_data["hz"] = float(self.hz)
   self.metrics_data["mocap_points"] = N
   self.metrics_data["mcu_points"] = self.mcu_data.shape[0]
   self.metrics_data["is_valid"] = self.is_valid
 
-  
   #clean up nans in metrics with zeros
   for key in self.metrics_data.keys():
       if self.metrics_data[key] == np.nan:
