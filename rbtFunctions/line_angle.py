@@ -45,6 +45,12 @@ def line_angle(self, dbg=False, **kwds):
       x3 = segment[-1, :]
       a = (x1[0] - x2[0], x1[1] - x2[1], 0)
       b = (x3[0] - x2[0], x3[1] - x2[1], 0)
+      adist= np.sqrt(a[0] * a[0] + a[1] * a[1])
+      bdist= np.sqrt(b[0] * b[0] + b[1] * b[1])
+      if adist== 0 or bdist== 0:
+        return 0
+      a = a / adist
+      b = b / bdist
       res = np.cross(a, b)[2]
       return res
   stack = np.vstack((x_pos, y_pos)).T
@@ -58,11 +64,13 @@ def line_angle(self, dbg=False, **kwds):
   samps = 20
   size = line_angles.shape[0]/samps
   samples_means = [np.mean(line_angles[(x)*size: (x+1)*size]) for x in range(samps)]
+  samples_stds= [np.std(line_angles[(x)*size: (x+1)*size]) for x in range(samps)]
   print samples_means
-  self.metrics_data["line_angle_mean"] = mean_angles
+  self.metrics_data["line_angle_cum_mean"] = mean_angles
   for i in range(samps):
     self.metrics_data["line_angle_mean_" + str(i)] = samples_means[i]
-  self.metrics_data["line_angle_stds"] = std_angles
+    self.metrics_data["line_angle_std_" + str(i)] = samples_means[i]
+  self.metrics_data["line_angle_cum_std"] = std_angles
 
   if dbg == True:
       plt.figure()
