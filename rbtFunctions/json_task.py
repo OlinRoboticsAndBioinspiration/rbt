@@ -9,6 +9,7 @@ def json_task(self, dbg=False, **kwds):
   Effects:
     Creates json file and saves to disk.
   """
+  json_dir = "json"
   x_pos = self.X[..., self.j['x']]
   y_pos = self.X[..., self.j['y']]
   z_pos = self.X[..., self.j['z']]
@@ -29,7 +30,7 @@ def json_task(self, dbg=False, **kwds):
           }
 
   json_dumps = json.dumps(obj);
-  json_file_name = self.fi +  ".json";
+  json_file_name = json_dir + "/" + self.fi +  ".json";
   json_file = open(json_file_name, 'wb_')
   json_file.write(json_dumps)
   json_file.close()
