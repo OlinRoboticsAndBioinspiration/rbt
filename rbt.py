@@ -65,8 +65,11 @@ def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz', n_jobs=1, **kwds):
         good_files.append(os.path.join(di, fi))
 
   print good_files
-  rbs = Parallel(n_jobs=n_jobs)(
-      delayed(do_)(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files)
+  if (n_jobs != 1):
+      rbs = Parallel(n_jobs=n_jobs)(
+          delayed(do_)(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files)
+  else:
+      rbs =[do_(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files]
   print "Finished running through files"
   return rbs
 
