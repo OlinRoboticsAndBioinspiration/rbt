@@ -20,14 +20,11 @@ def synth(di, take_valid=True):
   #TODO move configuration (metrics dir name) to global config
   di = os.path.join(di, "metrics")
   dfis = glob( os.path.join(di, '*'+"_metrics.py") )
-  print dfis
 
   data_array = []
   _, j_flat = get_metrics(dfis[0])
-  print j_flat
   for dfi in dfis:
     data, names = get_metrics(dfi)
-    print names
     assert names == j_flat
     data_array.append(data)
   base_files = [''.join(x.split("_")[0:-1]) for x in dfis]
@@ -46,7 +43,6 @@ def get_metrics(filename):
   returns 1XM matrix
   """
   dict_str = open(filename).read()
-  print filename
   data_dict = eval(dict_str)
   flat = [data_dict[x] for x in data_dict.keys()]
   return flat, data_dict.keys()
