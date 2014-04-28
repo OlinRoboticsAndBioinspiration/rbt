@@ -19,7 +19,7 @@ from glob import glob
 from rbtFunctions import load, crop, mcu, circle_fit, cal
 from rbtFunctions import dat, geom, json_task, ukf, plt, plane
 from rbtFunctions import vis3d, cfg_metrics, metrics, line_angle
-from rbtFunctions import time_metric
+from rbtFunctions import time_metric, standard_transform
 
 import numpy as np
 import numpy.linalg as la
@@ -54,6 +54,17 @@ def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz', n_jobs=1, **kwds):
   See also:
     do_() is called on each file
   """
+  good_files = get_runs(di, dev, exclude)
+
+  if (n_jobs != 1):
+      rbs = Parallel(n_jobs=n_jobs)(
+          delayed(do_)(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files)
+  else:
+      rbs =[do_(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files]
+  print "Finished running through files"
+  return rbs
+
+def get_runs(di, dev=None, exclude="_exclude"):
   sfx = dsfx[dev]
   dfis = glob( os.path.join(di, '*'+sfx) )
   efis = glob( os.path.join(di, ddir, '*'+exclude) )
@@ -64,15 +75,8 @@ def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz', n_jobs=1, **kwds):
     if dev == 'phase' or '_' not in fi:
       if os.path.join(di, ddir, fi+exclude) not in efis:
         good_files.append(os.path.join(di, fi))
+  return good_files
 
-  print good_files
-  if (n_jobs != 1):
-      rbs = Parallel(n_jobs=n_jobs)(
-          delayed(do_)(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files)
-  else:
-      rbs =[do_(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files]
-  print "Finished running through files"
-  return rbs
 
 def do_(fi='',dev=None,trk='rbt',procs=[],**kwds):
   """
