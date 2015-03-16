@@ -14,6 +14,7 @@ def load(rbt,fi=None,dbg=True):
   """
   if (not fi) and (rbt.fi):
     fi = rbt.fi
+  print fi
   if '_' in fi:
     fi,_ = fi.split('_')
   di,fi = os.path.split(fi)

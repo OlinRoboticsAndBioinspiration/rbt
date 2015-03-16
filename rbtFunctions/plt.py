@@ -9,7 +9,7 @@ fmts = ['png']
 pdir = 'plt'
 
 def plt(self,fmts=fmts,plts=['3d','2d','pd','xyz0','xyz','dxyz','pry','dpry', 'exp'],
-        save=True, show=True, crop=False, **kwds):
+        save=True, show=False, crop=False, **kwds):
   """
   Plot trajectory data 
   Inputs:

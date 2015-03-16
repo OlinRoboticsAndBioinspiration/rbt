@@ -1,5 +1,6 @@
 import numpy as np
 import json
+import os
 
 def json_task(self, dbg=False, **kwds):
   """
@@ -30,7 +31,13 @@ def json_task(self, dbg=False, **kwds):
           }
 
   json_dumps = json.dumps(obj);
-  json_file_name = json_dir + "/" + self.fi +  ".json";
-  json_file = open(json_file_name, 'wb_')
+
+  folder = "/".join(self.fi.split("/")[0:-1])
+  if not os.path.exists(os.path.dirname(self.fi) + "/" + json_dir):
+    os.mkdir(os.path.dirname(self.fi) + "/" + json_dir)
+
+  json_file_name = os.path.dirname(self.fi) + "/" + json_dir + "/" + os.path.basename(self.fi) +  ".json";
+  json_file = open(json_file_name, 'wb+')
+
   json_file.write(json_dumps)
   json_file.close()

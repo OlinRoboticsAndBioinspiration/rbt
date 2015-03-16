@@ -12,7 +12,7 @@ def vis3d(self, dbg=False, **kwds):
   di = os.path.join(di, vis_dir)
   if not os.path.exists( di ):
     os.mkdir( di )
-
+  print fi, "FFI"
   current_location = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
   template_loc = os.path.join(current_location, "template.html")
   template = open(template_loc, 'r+').read()

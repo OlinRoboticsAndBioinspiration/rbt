@@ -55,7 +55,7 @@ def do(di,dev=None,trk='rbt',procs=ukf,exclude='_ukf.npz', n_jobs=1, **kwds):
     do_() is called on each file
   """
   good_files = get_runs(di, dev, exclude)
-
+  print good_files, "<<good files"
   if (n_jobs != 1):
       rbs = Parallel(n_jobs=n_jobs)(
           delayed(do_)(f, dev=dev, trk=trk, procs=procs, **kwds) for f in good_files)
@@ -101,6 +101,7 @@ def do_(fi='',dev=None,trk='rbt',procs=[],**kwds):
     >> ukf.ukf(rb)
     >> plt.plt(rb)
   """
+  print procs
   rb = Rbt(fi,trk=trk,dev=dev)
   for proc in procs:
     cmd = proc + "." + proc + "(rb, **kwds)"
