@@ -33,7 +33,7 @@ cal_task = ['dat','plane','cal','plt']
 ukf_task = ['dat','cal','geom','ukf', 'json_task']#,'plt']
 plot = ['load', 'plt']
 skel = ['dat','geom','plt']
-fitness = ['load','crop', 'mcu', 'circle_fit', 'cfg_metrics', 'metrics']
+fitness = ['load','crop', 'mcu', 'circle_fit', 'cfg_metrics', 'time_metric', 'metrics']
 
 dsfx = {'opti':'_mocap.csv','vicon':'.dcr','phase':'.txt'}
 ddir = 'dat'
@@ -135,8 +135,10 @@ class Rbt():
       trk - str - name of rigid body trackable
       dev - str - motion capture hardware
     """
-    if '.' in fi:
-      fi,_ = fi.split('.')
+    # TODO fix this properly
+    #if '.' in fi:
+      #fi,_ = fi.split('.')
+
     self.fi = fi
     self.t = None #Time series
 

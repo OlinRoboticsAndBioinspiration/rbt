@@ -20,6 +20,9 @@ def synth(di, take_valid=True):
   #TODO move configuration (metrics dir name) to global config
   di = os.path.join(di, "metrics")
   dfis = glob( os.path.join(di, '*'+"_metrics.py") )
+  if len(dfis) == 0:
+      print "Warning: No files found"
+      return np.array([]), {}, []
 
   data_array = []
   _, j_flat = get_metrics(dfis[0])
@@ -35,7 +38,6 @@ def synth(di, take_valid=True):
   print -np.sum(valid_entries-1), "bad trials"
   data = data[valid_entries, ...]
   return data, keys, base_files
-
 
 def get_metrics(filename):
   """

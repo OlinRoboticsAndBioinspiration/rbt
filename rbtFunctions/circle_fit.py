@@ -137,6 +137,7 @@ def circle_fit(self, dbg=False, **kwds):
   curva_smooth= rolling(curvature, np.median, win)
   scaled_t = t[0:circles[..., 2].shape[0]*stride:stride]
   output_t = scaled_t[win:len(curvature)-win]
+
   if dbg==True:
       plt.figure()
       plt.plot(output_t, curva_smooth)
@@ -148,6 +149,9 @@ def circle_fit(self, dbg=False, **kwds):
       plt.title("rolling median curvature")
   #calculate stability
 
+  self.circle_fit_t = output_t
+  self.circle_fit = curvature.T
+
   print "std of entire data", np.std(curvature)
   variance = rolling(curvature, np.std, win)
   mean_win = 10
@@ -158,6 +162,7 @@ def circle_fit(self, dbg=False, **kwds):
       plt.plot(output_t[mean_win:-mean_win], variance_smooth)
       plt.title("rolling std")
       plt.ylabel("std")
+
 
   #partition into 4
   samples = len(variance_smooth)

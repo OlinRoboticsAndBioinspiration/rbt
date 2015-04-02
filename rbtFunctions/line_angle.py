@@ -4,7 +4,7 @@ from util import files,geom,num,util
 import matplotlib.pyplot as plt
 from scipy import optimize
 
-def line_angle(self, dbg=False, **kwds):
+def line_angle(self, window=40, dbg=False, **kwds):
   """
   Estimate curvature of the data by fitting 2 lines and getting angle
 
@@ -29,7 +29,6 @@ def line_angle(self, dbg=False, **kwds):
   x_pos = X[..., self.j['x']]
   y_pos = X[..., self.j['y']]
 
-  window = 40
 
   def rolling(series, func, win):
       num_curva = np.shape(series)[0]
@@ -59,6 +58,7 @@ def line_angle(self, dbg=False, **kwds):
   scaled_t = t[window:-window]
 
   mean_angles = np.mean(line_angles)
+  median_angles = np.median(line_angles)
   std_angles = np.std(line_angles)
 
   samps = 5
@@ -66,16 +66,21 @@ def line_angle(self, dbg=False, **kwds):
   size = line_angles.shape[0]/samps
   samples_means = [np.mean(line_angles[(x)*size: (x+1)*size]) for x in range(samps)]
   samples_stds= [np.std(line_angles[(x)*size: (x+1)*size]) for x in range(samps)]
-  print samples_means
   self.metrics_data["line_angle_cum_mean"] = mean_angles
+  self.metrics_data["line_angle_cum_median"] = median_angles
   for i in range(samps):
     self.metrics_data["line_angle_mean_" + str(i)] = samples_means[i]
     self.metrics_data["line_angle_std_" + str(i)] = samples_means[i]
   self.metrics_data["line_angle_cum_std"] = std_angles
 
+  self.line_angle = line_angles
+  self.line_angle_t = scaled_t
+
   if dbg == True:
       plt.figure()
       plt.plot(scaled_t, line_angles)
+      plt.title("Line angles vs time")
       plt.figure()
       plt.hist(line_angles, bins=30)
+      plt.title("Line angle hist")
       plt.show()
