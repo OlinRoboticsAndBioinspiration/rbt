@@ -5,7 +5,7 @@ from scipy.signal import gaussian
 import matplotlib
 from matplotlib import pyplot as plt
 
-def crop(self, std=40, window=300, find_at_speed=100, dbg=False,**kwds):
+def crop(self, std=40, window=300, find_at_speed=160, dbg=False,**kwds):
   """
   Estimates when the robot starts and stops running. Tries to remove start up noise as well as ending irregularities.
 
@@ -18,6 +18,7 @@ def crop(self, std=40, window=300, find_at_speed=100, dbg=False,**kwds):
   t = self.t; X = self.X; N,_ = X.shape; j = self.j; u = self.u
   working_hz = np.mean((1./np.diff(t)))
   speed = np.sqrt(np.diff(X[...,j['x']])**2 + np.diff(X[...,j['y']])**2)*working_hz
+  speed = np.clip(speed, 0, 1500)
   #window = 80
   gaus = gaussian(window, std)
   #normalize
@@ -101,5 +102,5 @@ def crop(self, std=40, window=300, find_at_speed=100, dbg=False,**kwds):
 
 
 
-  self.start_trial = first_idx
-  self.stop_trial = second_idx
+  self.start_trial = int(first_idx)
+  self.stop_trial = int(second_idx)

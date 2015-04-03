@@ -17,18 +17,18 @@ def line_angle(self, window=40, dbg=False, **kwds):
   """
 
 
+  if self.is_valid == False:
+      print "Got invalid, skipping"
+      return
   t = self.t; X = self.X; j = self.j; u = self.u
   hz = self.hz
   if self.start_trial:
-    X = self.X[self.start_trial : self.stop_trial, ...]
+    #X = self.X[self.start_trial : self.stop_trial, ...]
     t = t[self.start_trial : self.stop_trial]
   else:
-    print "WARNING, not cropping for circle fit. Run crop first"
+    print "WARNING, not cropping for line angle. Run crop first"
   N,_ = X.shape;
   #use the cropped version
-  x_pos = X[..., self.j['x']]
-  y_pos = X[..., self.j['y']]
-
 
   def rolling(series, func, win):
       num_curva = np.shape(series)[0]
@@ -53,6 +53,13 @@ def line_angle(self, window=40, dbg=False, **kwds):
       b = b / bdist
       res = np.cross(a, b)[2]
       return res
+
+  imin = self.start_trial-window
+  imax = self.stop_trial+window
+
+  x_pos = X[imin:imax, self.j['x']]
+  y_pos = X[imin:imax, self.j['y']]
+
   stack = np.vstack((x_pos, y_pos)).T
   line_angles = rolling(stack, line_angle, window)
   scaled_t = t[window:-window]

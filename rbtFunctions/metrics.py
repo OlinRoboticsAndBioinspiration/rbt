@@ -4,7 +4,7 @@ from util import files,geom,num,util
 from scipy.signal import gaussian
 
 metrics_dir = 'metrics'
-def metrics(self, dbg = False, **kwds):
+def metrics(self, dbg = False, write_file = True, **kwds):
   """
   Saves various statistics and metrics about the run. Writes metrics to file.
 
@@ -39,9 +39,10 @@ def metrics(self, dbg = False, **kwds):
   if not os.path.exists(di):
     os.mkdir(di)
 
-  self.metrics_data_file = open(os.path.join(di,fi+"_metrics.py"), "wb+")
-  self.metrics_data_file.write("%s" % self.metrics_data)
-  self.metrics_data_file.close()
+  if write_file == True:
+      self.metrics_data_file = open(os.path.join(di,fi+"_metrics.py"), "wb+")
+      self.metrics_data_file.write("%s" % self.metrics_data)
+      self.metrics_data_file.close()
 
   if dbg:
     plt.figure(2)
