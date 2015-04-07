@@ -19,7 +19,7 @@ from glob import glob
 from rbtFunctions import load, crop, mcu, circle_fit, cal
 from rbtFunctions import dat, geom, json_task, ukf, plt, plane
 from rbtFunctions import vis3d, cfg_metrics, metrics, line_angle
-from rbtFunctions import time_metric, standard_transform
+from rbtFunctions import time_metric, standard_transform, quality
 
 import numpy as np
 import numpy.linalg as la
