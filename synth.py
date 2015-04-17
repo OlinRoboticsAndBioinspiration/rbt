@@ -28,8 +28,11 @@ def synth(di, take_valid=True):
   _, j_flat = get_metrics(dfis[0])
   for dfi in dfis:
     data, names = get_metrics(dfi)
-    assert names == j_flat
+    #assert names == j_flat
+    if names != j_flat:
+        print "BAD FILE", dfi
     data_array.append(data)
+
   base_files = [''.join(x.split("_")[0:-1]) for x in dfis]
   data = np.vstack(data_array)
   keys = {k:i for i,k in enumerate(j_flat)}

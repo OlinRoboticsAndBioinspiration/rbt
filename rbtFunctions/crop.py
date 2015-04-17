@@ -27,7 +27,8 @@ def crop(self, std=40, window=300, find_at_speed=160, dbg=False,**kwds):
 
   speed_conv = np.convolve(speed, gaus, mode="same")
   #sketch root finding... and cropping....
-  margin_seconds = (.4, .2)
+  #margin_seconds = (.4, .2)
+  margin_seconds = (.6, .2)
 
   def bad_root_find():
     split_seconds = 2

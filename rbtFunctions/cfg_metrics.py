@@ -13,7 +13,6 @@ def cfg_metrics(self, **kwds):
   run_config = eval(open(os.path.join(di,fi+"_cfg.py")).read())
   file_name = run_config["cfg_file"]
   file_name = file_name.split("\\")[-1]
-  print file_name
   possible_offset = file_name.split("@")
   offset = None
   if len(possible_offset) > 1:
@@ -27,4 +26,3 @@ def cfg_metrics(self, **kwds):
   self.metrics_data["motor_cfg_1"] = float(cfgs[1])
   if offset is not None:
     self.metrics_data["motor_phase_offset"] = float(offset)
-  print self.metrics_data
